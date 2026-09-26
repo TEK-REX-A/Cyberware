@@ -48,7 +48,9 @@ public abstract class ParticleMixin {
         Particle self = (Particle) (Object) this;
         double timeScale = ClientTimeDilation.timeScaleAt(this.x, this.y, this.z);
         if (timeScale >= 1.0D) {
-            CYBERWARE$AGE.remove(self);
+            // 这里**故意什么都不做**。以前这里有 CYBERWARE$AGE.remove(self)，
+            // 那是每颗粒子每刻一次 WeakHashMap.remove —— 雨雪/爆炸时粒子成千上万，
+            // 光这一句就能把帧率啃掉一块。残留的条目是弱引用 key，粒子回收后自己会消失。
             return;
         }
 

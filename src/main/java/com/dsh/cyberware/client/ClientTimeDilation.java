@@ -89,6 +89,10 @@ public final class ClientTimeDilation {
 
     /** 世界坐标 (x,y,z) 处的减速比例，0 = 不受影响。多条源重叠时取最强的一条。 */
     public static float ratioAt(double x, double y, double z) {
+        // 快速路径：没人开减速时连时钟都不碰。粒子每刻都会走这条路，值钱。
+        if (SOURCES.isEmpty()) {
+            return 0.0F;
+        }
         long now = now();
         float best = 0.0F;
         for (Iterator<Source> it = SOURCES.iterator(); it.hasNext(); ) {
