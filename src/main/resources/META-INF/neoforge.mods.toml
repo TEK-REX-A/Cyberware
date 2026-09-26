@@ -1,0 +1,30 @@
+modLoader = "javafml"
+loaderVersion = "[1,)"
+license = "MIT"
+issueTrackerURL = "https://example.invalid/cyberware/issues"
+
+[[mods]]
+modId = "cyberware"
+version = "0.3.0-Beta"
+displayName = "Cyberware 义体系统"
+authors = "Neko"
+description = '''
+赛博朋克风格义体植入系统：义体容量、义体操作台、植入体界面、稀有度与升级。
+'''
+
+[[mixins]]
+config = "cyberware.mixins.json"
+
+[[dependencies.cyberware]]
+modId = "neoforge"
+type = "required"
+versionRange = "[26.1.2,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies.cyberware]]
+modId = "minecraft"
+type = "required"
+versionRange = "[26.1.2,)"
+ordering = "NONE"
+side = "BOTH"
