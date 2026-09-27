@@ -60,6 +60,19 @@ public final class AfterimageRenderer {
 
     /** 每种 state 类型各自的字段表（含父类）—— 只建一次，别再重复查找。 */
     private static final Map<Class<?>, List<Field>> FIELDS_CACHE = new HashMap<>();
+
+    /**
+     * 当前正在渲染的残影透明度（0 = 不在渲染残影）。
+     *
+     * <p>护甲层的 mixin 靠它判断「现在画的是残影还是本体」—— 只有 &gt; 0 时才把
+     * 护甲的镂空渲染类型换成半透明版本、并把染色乘上这个 alpha。
+     */
+    private static float ghostAlpha;
+
+    /** 供护甲层 mixin 读取。 */
+    public static float ghostAlpha() {
+        return ghostAlpha;
+    }
     /** 每种 state 类型的无参构造函数缓存。 */
     private static final Map<Class<?>, Constructor<?>> CTOR_CACHE = new HashMap<>();
 
@@ -103,6 +116,7 @@ public final class AfterimageRenderer {
         }
         int step = Math.max(1, available / wanted);
 
+        try {
         for (int g = 0; g < wanted; g++) {
             int index = 2 + g * step;
             if (index >= snapshots.size()) {
@@ -126,6 +140,9 @@ public final class AfterimageRenderer {
             ghost.walkAnimationPos = snapshot.walkPos();
             ghost.walkAnimationSpeed = snapshot.walkSpeed();
             ghost.ageInTicks = snapshot.age();
+
+            // 告诉护甲层的 mixin：现在画的是残影，请半透明
+            ghostAlpha = alpha;
 
             poseStack.pushPose();
             poseStack.translate(snapshot.x() - state.x,
@@ -154,6 +171,10 @@ public final class AfterimageRenderer {
             }
 
             poseStack.popPose();
+        }
+        } finally {
+            // 无论怎么退出，都必须清零 —— 否则本体的护甲也会被当成残影处理
+            ghostAlpha = 0.0F;
         }
     }
 

@@ -11,7 +11,8 @@
     "client.ParticleMixin",
     "client.WeatherEffectRendererMixin",
     "client.GameRendererMixin",
-    "client.LivingEntityRendererAccessor"
+    "client.LivingEntityRendererAccessor",
+    "client.EquipmentLayerRendererMixin"
   ],
   "injectors": {
     "defaultRequire": 1
