@@ -39,9 +39,8 @@ public final class CyberwareClient {
         NeoForge.EVENT_BUS.addListener(BerserkHud::onRenderGui);
         // 斯安威斯坦拖影（只对本地玩家）
         NeoForge.EVENT_BUS.addListener(AfterimageRenderer::onRenderLiving);
-        // 投射物时间减缓：客户端这一半 —— 按住本地物理推进，位置只认服务端（见类注释）
+        // 投射物时间减缓：客户端这一半 —— 与服务端同相位跳 tick（见类注释）
         NeoForge.EVENT_BUS.addListener(ClientProjectileDilation::onEntityTickPre);
-        NeoForge.EVENT_BUS.addListener(ClientProjectileDilation::onEntityTickPost);
         // 屏幕后处理：边缘径向模糊（强度随激活进度淡入淡出）
         // 后处理的执行点改由 GameRendererMixin 挂在原版那段代码后面
         // 激活时拉大 FOV（速度感）

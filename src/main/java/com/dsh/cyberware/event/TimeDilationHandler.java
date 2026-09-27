@@ -1,6 +1,7 @@
 package com.dsh.cyberware.event;
 
 import com.dsh.cyberware.config.CyberwareConfig;
+import com.dsh.cyberware.core.DilationTickGate;
 import com.dsh.cyberware.core.TimeDilationManager;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
@@ -48,15 +49,6 @@ public final class TimeDilationHandler {
     private static long lastRefreshTick = Long.MIN_VALUE;
 
     /**
-     * 投射物的寿命补偿累加器。
-     *
-     * <p>位置回拉让箭每 tick 只走 {@code timeScale} 倍的位移，但它的**存活刻数没变** ——
-     * 于是总飞行距离只剩原来的 timeScale 倍，表现出来就是「射程变短、飞到一半掉下来」。
-     * 这里把 {@code (1 - timeScale)} 攒起来，攒够一刻就替它少老一刻，射程就回来了。
-     */
-    private static final java.util.Map<Entity, double[]> PROJECTILE_AGE = new java.util.WeakHashMap<>();
-
-    /**
      * 参与减速的对象与豁免规则。
      *
      * <ul>
@@ -67,17 +59,43 @@ public final class TimeDilationHandler {
      * </ul>
      */
     private static boolean shouldAffect(Entity entity) {
+        if (!(entity instanceof LivingEntity)) {
+            return false;
+        }
         if (entity instanceof Player) {
             return false;
         }
-        if (entity.getFirstPassenger() instanceof Player) {
-            return false;
+        return !(entity.getFirstPassenger() instanceof Player);
+    }
+
+    /**
+     * 投射物：跳 tick（时间真·不流逝）。这里是**唯一**还在跳 tick 的地方。
+     *
+     * <p>为什么投射物不能用位置回拉（主人实测的两个现象就是证据）：
+     * 箭的物理是「每刻走完这一 tick 的位移 + 沿途做碰撞」。回拉只改了**位置**，
+     * 改不掉 tick 内部已经走完的那 3 格 —— 于是箭在服务端该撞的照样撞、该插地的照样插地，
+     * 而同步出去的位置却停在起点。主人看到的「完全时停」是这么来的；
+     * 减速一结束，客户端追上服务端的真实落点，就是那下「瞬移」。
+     *
+     * <p>跳 tick 才是物理自洽的：整刻不执行 = 时间没流逝，位置、碰撞、寿命一起慢。
+     * 客户端那边由 {@code ClientProjectileDilation} 按住本地物理推进，位置只认服务端包。
+     */
+    public static void onEntityTickPre(EntityTickEvent.Pre event) {
+        Entity entity = event.getEntity();
+        if (entity.level().isClientSide()) {
+            return;
         }
-        boolean isProjectile = entity instanceof Projectile;
-        if (!(entity instanceof LivingEntity) && !isProjectile) {
-            return false;
+        if (!(entity instanceof Projectile projectile)) {
+            return;
         }
-        return !(isProjectile && ((Projectile) entity).getOwner() instanceof Player);
+        // 玩家自己射出的箭豁免：自己没慢、箭却慢了就本末倒置
+        if (projectile.getOwner() instanceof Player) {
+            return;
+        }
+        double timeScale = TimeDilationManager.timeScaleFor(entity);
+        if (DilationTickGate.shouldSkip(entity, timeScale)) {
+            event.setCanceled(true);
+        }
     }
 
     public static void onEntityTick(EntityTickEvent.Post event) {
@@ -119,17 +137,6 @@ public final class TimeDilationHandler {
         entity.setPos(entity.xo + dx * timeScale,
                       entity.yo + dy * timeScale,
                       entity.zo + dz * timeScale);
-
-        // 投射物：补寿命，保住射程
-        if (entity instanceof Projectile) {
-            double[] acc = PROJECTILE_AGE.computeIfAbsent(entity, ignored -> new double[]{0.0D});
-            acc[0] += (1.0D - timeScale);
-            if (acc[0] >= 1.0D && entity.tickCount > 0) {
-                int step = (int) acc[0];
-                acc[0] -= step;
-                entity.tickCount = Math.max(0, entity.tickCount - step);
-            }
-        }
     }
 
     /**

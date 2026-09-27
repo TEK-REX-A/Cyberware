@@ -44,8 +44,10 @@ public class Cyberware {
         // ---- 网络包 ----
         modEventBus.addListener(CyberwareNetwork::register);
 
-        // 时间减缓：位置回拉 —— 生物与投射物都「照常 tick、刻末把位移按倍率缩回」
+        // 时间减缓 · 生物：位置回拉 —— 照常 tick、刻末把位移按倍率缩回
         NeoForge.EVENT_BUS.addListener(TimeDilationHandler::onEntityTick);
+        // 时间减缓 · 投射物：跳 tick —— 时间真·不流逝（位置回拉对箭矢的碰撞/落点不成立）
+        NeoForge.EVENT_BUS.addListener(TimeDilationHandler::onEntityTickPre);
         // 子弹时间：激活期间免疫弹射物伤害
         NeoForge.EVENT_BUS.addListener(TimeDilationHandler::onIncomingDamage);
         // 击杀延长：减速期间击杀敌人 → 持续时间往后推
