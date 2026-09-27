@@ -10,12 +10,13 @@ import net.minecraft.client.player.LocalPlayer;
 /**
  * 残影快照。
  *
- * <p>每 tick 抓一份**本地玩家**的状态，维护一个最近 N 份的队列，渲染时按
- * 「越老的越暗、颜色越靠后」画出去 —— 这就是 A.txt 里说的洋葱皮。
+ * <p>每 tick 抓一份**本地玩家**的状态，渲染时按「越老越暗」画出去 —— A.txt 说的洋葱皮。
  *
- * <p>记录的东西照着 A.txt 第 1 条来：位置、身体 Yaw、头部 Pitch、
- * 四肢摆动（{@code walkAnimationPos}）与摆动幅度（{@code walkAnimationSpeed}）、
- * 以及存活刻数 {@code ageInTicks}。少一样，残影的动作就会「跟着本体一起动」。
+ * <p>记录的东西照着 A.txt 第 1 条：位置、身体 Yaw、头部 Pitch、四肢摆动、ageInTicks；
+ * 外加披风的三个姿态参数（{@code capeFlap} / {@code capeLean} / {@code capeLean2}）——
+ * 少这一组，残影的披风就会跟着本体一起摆（主人实测报过）。
+ *
+ * <p>披风参数只在渲染状态里才有，所以这里读的是 {@link AfterimageRenderer} 每帧缓存下来的值。
  *
  * <p>只对自己 —— 给敌人做只是给敌人加特效，没意义。
  */
@@ -35,7 +36,8 @@ public final class AfterimageTracker {
     /** 一份快照：只存画一个「影子」需要的东西。 */
     public record Snapshot(double x, double y, double z,
                            float bodyRot, float yRot, float xRot,
-                           float walkPos, float walkSpeed, float age) {
+                           float walkPos, float walkSpeed, float age,
+                           float capeFlap, float capeLean, float capeLean2) {
     }
 
     /** 每客户端 tick 调一次。 */
@@ -60,7 +62,10 @@ public final class AfterimageTracker {
                 player.getX(), player.getY(), player.getZ(),
                 player.yBodyRot, player.getYRot(), player.getXRot(),
                 player.walkAnimation.position(), player.walkAnimation.speed(),
-                player.tickCount));
+                player.tickCount,
+                AfterimageRenderer.cachedCapeFlap(),
+                AfterimageRenderer.cachedCapeLean(),
+                AfterimageRenderer.cachedCapeLean2()));
 
         while (SNAPSHOTS.size() > MAX_SNAPSHOTS) {
             SNAPSHOTS.removeLast();

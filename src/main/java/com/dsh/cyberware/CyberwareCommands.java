@@ -13,7 +13,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  * 调试命令（第二步临时用，等按键绑定做好后再决定是否保留）。
  *
  * <pre>
- * /cyberware sandevistan              用「泽塔科技斯安威斯坦·普通」的数值触发一次减速
+ * /cyberware sandevistan              用「泽塔科技·斯安威斯坦·普通」的数值触发一次减速
  * /cyberware dilate &lt;比例&gt; &lt;秒&gt;    自定义比例与时长，例如 /cyberware dilate 0.5 6
  * /cyberware stop                     立刻结束减速
  * </pre>

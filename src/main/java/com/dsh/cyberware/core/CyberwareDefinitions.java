@@ -18,9 +18,9 @@ public final class CyberwareDefinitions {
 
     // ═══════════════════ 操作系统 · 斯安威斯坦 ═══════════════════
 
-    /** 1. 泽塔科技斯安威斯坦 —— 普通/精良/史诗 */
+    /** 1. 泽塔科技·斯安威斯坦 —— 普通/精良/史诗 */
     public static final CyberwareDefinition SANDEVISTAN_ZETATECH = register(new CyberwareDefinition(
-            "sandevistan_zetatech", "泽塔科技斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
+            "sandevistan_zetatech", "泽塔科技·斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
             "cyberware:item/sandevistan_zetatech",
             "泽塔科技的入门级斯安威斯坦，改写神经系统对时间的感知。",
             List.of(
@@ -31,9 +31,9 @@ public final class CyberwareDefinitions {
                     variant(CyberwareRarity.EPIC, 22, stats(
                             Stats.TIME_SLOW, 0.50, Stats.DURATION, 16, Stats.COOLDOWN, 30, Stats.CRIT_CHANCE, 20)))));
 
-    /** 2. 迪纳拉斯安威斯坦 —— 普通/精良/史诗/传说 */
+    /** 2. 迪纳拉·斯安威斯坦 —— 普通/精良/史诗/传说 */
     public static final CyberwareDefinition SANDEVISTAN_DYNALAR = register(new CyberwareDefinition(
-            "sandevistan_dynalar", "迪纳拉斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
+            "sandevistan_dynalar", "迪纳拉·斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
             "cyberware:item/sandevistan_dynalar",
             "以稳定性著称的斯安威斯坦，改造越深，出血量越大。",
             List.of(
@@ -46,9 +46,9 @@ public final class CyberwareDefinitions {
                     variant(CyberwareRarity.LEGENDARY, 30, stats(
                             Stats.TIME_SLOW, 0.75, Stats.DURATION, 16, Stats.COOLDOWN, 30, Stats.ALL_DAMAGE, 15)))));
 
-    /** 3. 千替斯安威斯坦 —— 传说/神话 */
+    /** 3. 千替“实境扭曲”·斯安威斯坦 —— 传说/神话 */
     public static final CyberwareDefinition SANDEVISTAN_QIANTAI = register(new CyberwareDefinition(
-            "sandevistan_qiantai", "千替斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
+            "sandevistan_qiantai", "千替“实境扭曲”·斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
             "cyberware:item/sandevistan_qiantai",
             "千替的高端型号：压缩得更狠，代价是更短的窗口。",
             List.of(
@@ -59,21 +59,21 @@ public final class CyberwareDefinitions {
                             Stats.TIME_SLOW, 0.90, Stats.DURATION, 8, Stats.COOLDOWN, 30,
                             Stats.CRIT_CHANCE, 10, Stats.CRIT_DAMAGE, 50)))));
 
-    /** 4. 军用科技「游隼」斯安威斯坦 —— 神话 */
+    /** 4. 军用科技“游隼”·斯安威斯坦 —— 神话 */
     public static final CyberwareDefinition SANDEVISTAN_MILITECH_FALCON = register(new CyberwareDefinition(
-            "sandevistan_militech_falcon", "军用科技「游隼」斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
+            "sandevistan_militech_falcon", "军用科技“游隼”·斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
             "cyberware:item/sandevistan_militech_falcon",
-            "军用科技「游隼」，为长窗口压制而生。",
+            "军用科技“游隼”，为长窗口压制而生。",
             List.of(
                     variant(CyberwareRarity.MYTHIC, 39, stats(
                             Stats.TIME_SLOW, 0.70, Stats.DURATION, 20, Stats.COOLDOWN, 30,
                             Stats.ALL_DAMAGE, 15, Stats.CRIT_CHANCE, 20, Stats.CRIT_DAMAGE, 35)))));
 
-    /** 5. 军用科技「远地点」斯安威斯坦 —— 史诗/传说/神话 */
+    /** 5. 军用科技“远地点”·斯安威斯坦 —— 史诗/传说/神话 */
     public static final CyberwareDefinition SANDEVISTAN_MILITECH_APOGEE = register(new CyberwareDefinition(
-            "sandevistan_militech_apogee", "军用科技「远地点」斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
+            "sandevistan_militech_apogee", "军用科技“远地点”·斯安威斯坦", CyberwareSlot.OPERATING_SYSTEM, true,
             "cyberware:item/sandevistan_militech_apogee",
-            "军用科技「远地点」：时间被压到几乎静止，代价是极短的窗口与极高的负荷。",
+            "军用科技“远地点”：时间被压到几乎静止，代价是极短的窗口与极高的负荷。",
             List.of(
                     variant(CyberwareRarity.EPIC, 44, stats(
                             Stats.TIME_SLOW, 0.85, Stats.DURATION, 6, Stats.COOLDOWN, 30,
