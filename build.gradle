@@ -4,7 +4,7 @@ plugins {
 }
 
 group = 'com.dsh.cyberware'
-version = '0.3.11-Beta'
+version = '0.3.11-Beta-Hotfix-1'
 description = 'Cyberware - 赛博朋克风格义体植入系统'
 
 java {

@@ -90,7 +90,7 @@ public final class AfterimageHistory {
             for (Class<?> cursor = key; cursor != null && cursor != Object.class; cursor = cursor.getSuperclass()) {
                 MethodHandles.Lookup lookup;
                 try {
-                    lookup = MethodHandles.privateLookupIn(cursor, base);
+                    lookup = base;
                 } catch (Throwable t) {
                     continue;
                 }
