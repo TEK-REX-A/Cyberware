@@ -35,3 +35,11 @@ neoForge {
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
 }
+
+// 把真实版本号展开进 mod 元数据 —— 之前是写死的，游戏里永远显示 0.3.0-Beta
+tasks.named('processResources') {
+    inputs.property 'version', project.version
+    filesMatching('META-INF/neoforge.mods.toml') {
+        expand 'version': project.version
+    }
+}
