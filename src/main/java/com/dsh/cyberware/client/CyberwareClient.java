@@ -79,14 +79,13 @@ public final class CyberwareClient {
             ClientPacketDistributor.sendToServer(new ActivatePayload());
         }
         SandevistanPostProcessor.tick();
-        AfterimageTracker.tick();
 
         Minecraft minecraft = Minecraft.getInstance();
         if (minecraft.level == null) {
             // 换维度/退出世界：这些时钟绑定的都是上一批对象
             ParticleTickClock.clear();
             WeatherTickClock.reset();
-            AfterimageTracker.clear();
+            AfterimageHistory.clear();
         } else {
             double timeScale = ClientTimeDilation.timeScaleAt(
                     minecraft.player == null ? 0.0D : minecraft.player.getX(),
