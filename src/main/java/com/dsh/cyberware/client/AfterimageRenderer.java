@@ -2,10 +2,13 @@ package com.dsh.cyberware.client;
 
 import com.dsh.cyberware.mixin.client.LivingEntityRendererAccessor;
 import com.mojang.blaze3d.vertex.PoseStack;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.player.LocalPlayer;
@@ -55,8 +58,10 @@ public final class AfterimageRenderer {
     /** 原版渲染器在模型前的下移量（照抄 LivingEntityRenderer.submit） */
     private static final float MODEL_Y_OFFSET = -1.501F;
 
-    /** 反射字段表只建一次 —— 每帧对十几个残影做反射已经够贵了，别再重复查找。 */
-    private static final List<Field> STATE_FIELDS = collectStateFields();
+    /** 每种 state 类型各自的字段表（含父类）—— 只建一次，别再重复查找。 */
+    private static final Map<Class<?>, List<Field>> FIELDS_CACHE = new HashMap<>();
+    /** 每种 state 类型的无参构造函数缓存。 */
+    private static final Map<Class<?>, Constructor<?>> CTOR_CACHE = new HashMap<>();
 
     private AfterimageRenderer() {
     }
@@ -152,31 +157,55 @@ public final class AfterimageRenderer {
         }
     }
 
-    /** 收集 LivingEntityRenderState（含父类）里所有可写的实例字段。 */
-    private static List<Field> collectStateFields() {
-        List<Field> fields = new ArrayList<>();
-        for (Class<?> type = LivingEntityRenderState.class;
-                type != null && type != Object.class;
-                type = type.getSuperclass()) {
-            for (Field field : type.getDeclaredFields()) {
-                if (Modifier.isStatic(field.getModifiers())) {
-                    continue;
-                }
-                try {
-                    field.setAccessible(true);
-                    fields.add(field);
-                } catch (Throwable ignored) {
-                    // 拿不到就算，缺一个字段不影响整体观感
+    /** 收集某个类型（含全部父类）里所有可写的实例字段。 */
+    private static List<Field> fieldsOf(Class<?> type) {
+        return FIELDS_CACHE.computeIfAbsent(type, key -> {
+            List<Field> fields = new ArrayList<>();
+            for (Class<?> cursor = key; cursor != null && cursor != Object.class; cursor = cursor.getSuperclass()) {
+                for (Field field : cursor.getDeclaredFields()) {
+                    if (Modifier.isStatic(field.getModifiers())) {
+                        continue;
+                    }
+                    try {
+                        field.setAccessible(true);
+                        fields.add(field);
+                    } catch (Throwable ignored) {
+                        // 拿不到就算，缺一个字段不影响整体观感
+                    }
                 }
             }
-        }
-        return fields;
+            return fields;
+        });
     }
 
-    /** 复制一份渲染状态 —— 让每个残影拥有「那一刻」的完整数据。 */
+    /**
+     * 复制一份渲染状态 —— 让每个残影拥有「那一刻」的完整数据。
+     *
+     * <p><b>必须按原对象的真实类型来造。</b>玩家的 state 是 {@code AvatarRenderState}
+     * （{@code LivingEntityRenderState} 的子类），护甲层、披风层内部会把它强转回去 ——
+     * 早先这里写死 {@code new LivingEntityRenderState()}，一开斯安威斯坦就是
+     * {@code ClassCastException}，直接把渲染线程打崩。
+     */
     private static LivingEntityRenderState copyState(LivingEntityRenderState src) {
-        LivingEntityRenderState dst = new LivingEntityRenderState();
-        for (Field field : STATE_FIELDS) {
+        Class<?> type = src.getClass();
+        LivingEntityRenderState dst;
+        try {
+            Constructor<?> ctor = CTOR_CACHE.computeIfAbsent(type, key -> {
+                try {
+                    Constructor<?> found = key.getDeclaredConstructor();
+                    found.setAccessible(true);
+                    return found;
+                } catch (Throwable t) {
+                    return null;
+                }
+            });
+            dst = ctor == null
+                    ? new LivingEntityRenderState()
+                    : (LivingEntityRenderState) ctor.newInstance();
+        } catch (Throwable t) {
+            dst = new LivingEntityRenderState();
+        }
+        for (Field field : fieldsOf(type)) {
             try {
                 field.set(dst, field.get(src));
             } catch (Throwable ignored) {
