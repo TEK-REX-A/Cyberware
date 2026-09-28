@@ -35,6 +35,10 @@ public final class AfterimageHistory {
     private static int head = 0;
     /** 已填充数量（最多 CAPACITY） */
     private static int count = 0;
+    /** 诊断用：只打一次 */
+    private static final java.util.concurrent.atomic.AtomicBoolean LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
     /** 上次采样的 tick —— 一 tick 可能渲染多帧，别重复存 */
     private static int lastSampleTick = Integer.MIN_VALUE;
 
@@ -60,7 +64,13 @@ public final class AfterimageHistory {
             target = create(type);
             RING[slot] = target;
         }
-        copyInto(current, target, handlesOf(type));
+        java.util.List<VarHandle> handles = handlesOf(type);
+        copyInto(current, target, handles);
+        if (LOGGED.compareAndSet(false, true)) {
+            System.out.println("[cyberware] 残影采样: handles=" + handles.size()
+                    + " | src walk=" + current.walkAnimationPos + " x=" + current.x
+                    + " | dst walk=" + target.walkAnimationPos + " x=" + target.x);
+        }
     }
 
     /** index = 0 表示最近的一份；越界返回 null。 */

@@ -57,6 +57,10 @@ public final class AfterimageRenderer {
     /** 原版渲染器在模型前的下移量（照抄 LivingEntityRenderer.submit） */
     private static final float MODEL_Y_OFFSET = -1.501F;
 
+    /** 诊断用：只打一次 */
+    private static final java.util.concurrent.atomic.AtomicBoolean LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
     /** 渲染残影期间的透明度（0 = 不在渲染残影），护甲 mixin 靠它判断 */
     private static float ghostAlpha;
 
@@ -108,6 +112,11 @@ public final class AfterimageRenderer {
                 LivingEntityRenderState ghost = AfterimageHistory.get(2 + g * step);
                 if (ghost == null) {
                     break;
+                }
+                if (g == 0 && LOGGED.compareAndSet(false, true)) {
+                    System.out.println("[cyberware] 残影渲染: index=" + (2 + g * step)
+                            + " | ghost walk=" + ghost.walkAnimationPos + " x=" + ghost.x
+                            + " | current walk=" + state.walkAnimationPos + " x=" + state.x);
                 }
                 float t = wanted <= 1 ? 1.0F : (float) g / (wanted - 1);
                 float alpha = MAX_ALPHA * (1.0F - ALPHA_FALLOFF * t) * intensity;
