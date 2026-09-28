@@ -38,6 +38,9 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 @Mixin(EquipmentLayerRenderer.class)
 public class EquipmentLayerRendererMixin {
 
+    /** 诊断日志去重：每种护甲层只打印一次，免得每帧 4 条刷爆日志 */
+    private static final java.util.Set<String> LOGGED = new java.util.HashSet<>();
+
     /** 护甲的镂空渲染类型 → 残影上下文换成半透明版本。 */
     @Redirect(
         method = "renderLayers(Lnet/minecraft/client/resources/model/EquipmentClientInfo$LayerType;Lnet/minecraft/resources/ResourceKey;Lnet/minecraft/client/model/Model;Ljava/lang/Object;Lnet/minecraft/world/item/ItemStack;Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/SubmitNodeCollector;ILnet/minecraft/resources/Identifier;II)V",
@@ -47,7 +50,10 @@ public class EquipmentLayerRendererMixin {
     )
     private RenderType cyberware$ghostArmorRenderType(Identifier texture) {
         if (AfterimageRenderer.ghostAlpha() > 0.0F) {
-            return RenderTypes.armorTranslucent(texture);
+            // 用主模型同一个渲染类型 —— 主人已经验证过它确实吃 alpha。
+            // 早先换的是游戏自带的 armorTranslucent，它是给「皮革护甲」准备的特殊类型，
+            // 对下界合金甲这种三层不透明材质并不生效（实测只有头盔看着变了）。
+            return RenderTypes.entityTranslucentCullItemTarget(texture);
         }
         return RenderTypes.armorCutoutNoCull(texture);
     }
@@ -65,6 +71,11 @@ public class EquipmentLayerRendererMixin {
         float alpha = AfterimageRenderer.ghostAlpha();
         if (alpha <= 0.0F) {
             return color;
+        }
+        if (LOGGED.add(String.valueOf(layer))) {
+            // 只打印一次：每帧 4 个部位都打会把日志刷爆
+            System.out.println("[cyberware] 护甲残影染色生效: alpha=" + alpha
+                    + " color=" + Integer.toHexString(color));
         }
         return ARGB.multiplyAlpha(color, alpha);
     }
