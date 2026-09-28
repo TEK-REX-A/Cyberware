@@ -10,6 +10,7 @@ import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
+import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.client.renderer.rendertype.RenderType;
 import net.minecraft.client.renderer.rendertype.RenderTypes;
@@ -34,8 +35,11 @@ import net.neoforged.neoforge.client.event.RenderLivingEvent;
  * <p>3. 复制 state 要**快** —— 早先的反射实现让主人帧率掉了一半，现在走 {@link AfterimageHistory}，
  *    用 VarHandle + 环形缓冲复用对象，零分配。
  *
- * <p><b>动作定格：</b>历史里存的是**整份** render state，所以残影的姿势、四肢、披风、
- * 游泳/蹲下/挥手/鞘翅等一切动画都停在那一刻，不会再跟着本体动。
+ * <p><b>动作定格（2026-09-28 修）：</b>光存整份 state 还不够 —— 若每 tick 都往环里写一份，
+ * 环的 head 就每 tick 前进一格，{@code get(index)} 每 tick 换一份快照，残影的姿势依旧每 tick 在变
+ * （观感 =「残影在滞后几 tick 地播放本体的动画」，也就是主人说的「位置定格了、四肢还在甩」）。
+ * 真正让它定住的是 {@link AfterimageHistory#INTERVAL}：隔 2 tick 才落一次盘，
+ * 两次采样之间残影读的是同一份快照，姿势完全冻结，每 0.1 秒跳一帧。
  *
  * <p>只对**本地玩家**生效 —— 第一人称看不到自己，第三人称（F5）最明显。
  */
@@ -54,11 +58,22 @@ public final class AfterimageRenderer {
     private static final float HUE_FAR = 0.38F;
     /** 最多画几个残影 */
     private static final int MAX_GHOSTS = 8;
+    /**
+     * 残影之间隔几份快照 —— 配合 {@link AfterimageHistory#INTERVAL} 决定时间跨度。
+     * step=1、INTERVAL=2 → 8 个残影分别是 2/4/…/16 tick 前（0.1~0.8 秒），挨得比 step=2 密一倍。
+     */
+    private static final int GHOST_STEP = 1;
     /** 原版渲染器在模型前的下移量（照抄 LivingEntityRenderer.submit） */
     private static final float MODEL_Y_OFFSET = -1.501F;
 
     /** 诊断用：只打一次 */
     private static final java.util.concurrent.atomic.AtomicBoolean LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** 诊断用：图层清单只打一次 */
+    private static final java.util.concurrent.atomic.AtomicBoolean LAYER_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** 保命用：异常日志只打一次 */
+    private static final java.util.concurrent.atomic.AtomicBoolean FAIL_LOGGED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /** 渲染残影期间的透明度（0 = 不在渲染残影），护甲 mixin 靠它判断 */
@@ -71,7 +86,27 @@ public final class AfterimageRenderer {
         return ghostAlpha;
     }
 
+    /**
+     * 渲染事件的入口。
+     *
+     * <p><b>外面这层 try/catch 是保命的。</b>渲染事件里抛出任何异常都会直接崩客户端 ——
+     * 0.3.11-Hotfix-6 就因为一个 {@code ClassCastException} 把主人踢出过游戏。
+     * 残影只是装饰品，出任何意外都只打一条日志，绝不中断游戏。
+     */
     public static void onRenderLiving(RenderLivingEvent.Pre<?, ?, ?> event) {
+        try {
+            renderAfterimages(event);
+        } catch (Throwable t) {
+            if (FAIL_LOGGED.compareAndSet(false, true)) {
+                System.out.println("[cyberware] 残影渲染异常（已忽略，不影响游戏）: " + t);
+                t.printStackTrace();
+            }
+        } finally {
+            ghostAlpha = 0.0F;
+        }
+    }
+
+    private static void renderAfterimages(RenderLivingEvent.Pre<?, ?, ?> event) {
         // 只跟斯安威斯坦 —— 狂暴是力量型，不拖影
         float intensity = ClientTimeDilation.ratioNow();
         if (intensity <= 0.05F) {
@@ -89,11 +124,17 @@ public final class AfterimageRenderer {
         AfterimageHistory.sample(state, gameTime);
 
         int available = AfterimageHistory.size() - 2;
-        int wanted = Math.min(MAX_GHOSTS, available);
+        if (available <= 0) {
+            return;
+        }
+        // 固定步长。早先是把 8 个残影摊到整条环上（step = available / wanted），
+        // 那会把最老的一份拉到 46*INTERVAL ≈ 3.7 秒前 —— 位置远得没有意义。
+        // 改成定步长：残影数量由「攒了多少份历史」决定，不够就少画几个。
+        int wanted = Math.min(MAX_GHOSTS, available / GHOST_STEP);
         if (wanted <= 0) {
             return;
         }
-        int step = Math.max(1, available / wanted);
+        int step = GHOST_STEP;
 
         LivingEntityRenderer renderer = (LivingEntityRenderer) event.getRenderer();
         LivingEntityRendererAccessor accessor = (LivingEntityRendererAccessor) renderer;
@@ -114,7 +155,9 @@ public final class AfterimageRenderer {
                     break;
                 }
                 if (g == 0 && LOGGED.compareAndSet(false, true)) {
+                    int ageTicks = (2 + g * step) * AfterimageHistory.INTERVAL;
                     System.out.println("[cyberware] 残影渲染: index=" + (2 + g * step)
+                            + " ageTicks=" + ageTicks
                             + " | ghost walk=" + ghost.walkAnimationPos + " x=" + ghost.x
                             + " | current walk=" + state.walkAnimationPos + " x=" + state.x);
                 }
@@ -144,6 +187,11 @@ public final class AfterimageRenderer {
                 collector.submitModel(model, ghost, poseStack, renderType,
                         ghost.lightCoords, OverlayTexture.NO_OVERLAY, color, null, 0, null);
 
+                if (g == 0 && LAYER_LOGGED.compareAndSet(false, true)) {
+                    System.out.println("[cyberware] 残影图层: collector=" + (layerCollector != null)
+                            + " count=" + layers.size() + " -> " + layers.stream()
+                                    .map(l -> l.getClass().getSimpleName()).toList());
+                }
                 if (layerCollector != null) {
                     model.setupAnim(ghost);
                     for (RenderLayer<LivingEntityRenderState, ?> layer : layers) {
@@ -159,8 +207,23 @@ public final class AfterimageRenderer {
         }
     }
 
-    /** 用渲染坐标判断这是不是本地玩家（RenderLivingEvent 拿不到实体）。 */
+    /**
+     * 判断这份渲染状态是不是本地玩家的。
+     *
+     * <p><b>必须先认类型、再比坐标 —— 顺序不能反（Hotfix-7 修崩溃）。</b>
+     * 早先只比坐标（差 &lt; 0.08 格就算本地玩家），于是监守者站到主人身上时，
+     * 监守者的 {@code WardenRenderState} 也满足「离玩家很近」，被当成玩家放进了后面的流程 ——
+     * 结果是拿 {@code WardenModel} 去 {@code setupAnim} 玩家的状态，
+     * 一个 {@code ClassCastException} 当场把游戏崩掉。
+     *
+     * <p>坐标只能说明「离得近」，说明不了「他是谁」。身份得靠类型认。
+     */
     private static boolean isLocalPlayer(LivingEntityRenderState state, float partialTick) {
+        // 1) 身份：只有玩家才有 AvatarRenderState —— 监守者、宠物、一切其它生物挡在这里
+        if (!(state instanceof AvatarRenderState)) {
+            return false;
+        }
+        // 2) 位置：再排除掉别的玩家
         LocalPlayer self = Minecraft.getInstance().player;
         if (self == null) {
             return false;

@@ -24,8 +24,22 @@ import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
  */
 public final class AfterimageHistory {
 
-    /** 保留多少份（≈ 多少 tick 的历史） */
+    /** 保留多少份快照 */
     public static final int CAPACITY = 48;
+
+    /**
+     * 采样间隔（tick）—— <b>「动作定格」的关键</b>。
+     *
+     * <p>为什么不每 tick 都采样：每 tick 写一份，环的 {@code head} 就每 tick 前进一格，
+     * 于是 {@link #get(int)} 每 tick 都指向<b>不同的</b>快照 —— 残影的姿势每 tick 换一次，
+     * 视觉上等于「残影在滞后几 tick 地播放本体的跑步动画」，
+     * 正是主人说的「位置定格了、四肢还在跟着甩」。
+     *
+     * <p>隔 {@code INTERVAL} tick 才落一次盘，两次采样之间 {@code head} 不动，
+     * {@code get(index)} 返回的就是<b>同一份</b>快照 —— 姿势在这段时间里完全冻结。
+     * 观感：每个残影都是一张定住的照片，每 0.1 秒跳一帧（定格动画）。
+     */
+    public static final int INTERVAL = 2;
 
     private static final LivingEntityRenderState[] RING = new LivingEntityRenderState[CAPACITY];
     private static final Map<Class<?>, List<VarHandle>> HANDLES = new HashMap<>();
@@ -51,6 +65,11 @@ public final class AfterimageHistory {
             return;
         }
         lastSampleTick = gameTime;
+        // ★ 定格：只有采样帧才让 head 前进。两次采样之间 head 不动，
+        //   残影读到的永远是同一份快照 —— 姿势冻结，不再跟着本体甩。
+        if (Math.floorMod(gameTime, INTERVAL) != 0) {
+            return;
+        }
 
         Class<?> type = current.getClass();
         int slot = head;

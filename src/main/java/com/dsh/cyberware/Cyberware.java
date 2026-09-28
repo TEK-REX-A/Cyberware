@@ -5,6 +5,7 @@ import com.dsh.cyberware.event.BerserkHandler;
 import com.dsh.cyberware.event.TimeDilationHandler;
 import com.dsh.cyberware.config.CyberwareConfig;
 import com.dsh.cyberware.network.CyberwareNetwork;
+import com.dsh.cyberware.registry.ModAttachments;
 import com.dsh.cyberware.registry.ModBlockEntities;
 import com.dsh.cyberware.registry.ModBlocks;
 import com.dsh.cyberware.registry.ModComponents;
@@ -39,6 +40,7 @@ public class Cyberware {
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
         ModMenus.MENUS.register(modEventBus);
         ModComponents.COMPONENTS.register(modEventBus);
+        ModAttachments.ATTACHMENTS.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
 
         // ---- 网络包 ----
