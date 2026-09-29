@@ -24,6 +24,20 @@ public final class CyberwareKeys {
             InputConstants.KEY_V,
             CATEGORY);
 
+    /**
+     * 打开「已安装义体」轮盘（默认 R）。
+     *
+     * <p>V 键只能激活**手上**那件；装上身的义体要靠这个轮盘选。
+     * 0.3.12 只注册键位：**触发逻辑（{@code consumeClick} → 打开轮盘界面）在 t14 接**，
+     * 见 {@code cyberware-0312} 的任务 t14 / 界面 {@code client/CyberwareRadialScreen.java}。
+     * 键位显示名需要 lang：{@code key.cyberware.radial}。
+     */
+    public static final KeyMapping RADIAL = new KeyMapping(
+            "key.cyberware.radial",
+            InputConstants.Type.KEYSYM,
+            InputConstants.KEY_R,
+            CATEGORY);
+
     private CyberwareKeys() {
     }
 }

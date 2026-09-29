@@ -80,4 +80,39 @@ public final class CyberwareAbilities {
         }
         return false;
     }
+
+    /**
+     * 激活**玩家已安装**的一件义体（R 键轮盘走这条）。
+     *
+     * <p><b>安全要点（客户端不可信）</b>：{@code defId} 是客户端发来的，
+     * 它只表达「我想激活哪一个」，**不是**「我有权激活」的凭证。
+     * 所以这里以服务端的已安装附件为唯一依据：
+     * {@link CyberwareInstallation#dataOf(Player, String)} 查不到就立刻失败 ——
+     * 没装过的东西，客户端喊破喉咙也不会得到任何效果。
+     *
+     * <p>查到了就复用 {@link #activate(Player, CyberwareDefinition, CyberwareData)}，
+     * 时间减缓 / 狂暴 / 其它主动效果的分支逻辑一份都不复制。
+     *
+     * @param defId 目标型号 id（型号 id = 物品注册名，例如 {@code sandevistan_c4}）
+     * @return 是否真的触发了什么
+     */
+    public static boolean activateInstalled(Player player, String defId) {
+        if (player == null || defId == null || defId.isBlank()) {
+            return false;
+        }
+        CyberwareData installed = CyberwareInstallation.dataOf(player, defId);
+        if (installed == null) {
+            // 没装（或装的是别的）→ 直接失败：不抛异常，也不给效果
+            com.dsh.cyberware.Cyberware.LOGGER.debug("[cyberware] 拒绝激活 {}：{} 身上并没有安装该义体",
+                    defId, player.getName().getString());
+            return false;
+        }
+        CyberwareDefinition def = CyberwareDefinitions.byId(defId);
+        if (def == null) {
+            // 已安装表里留着、但定义表里已经没有的型号（旧存档 / 被删定义）
+            com.dsh.cyberware.Cyberware.LOGGER.warn("[cyberware] 已安装的 {} 在定义表里不存在，无法激活", defId);
+            return false;
+        }
+        return activate(player, def, installed);
+    }
 }

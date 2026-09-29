@@ -1,6 +1,7 @@
 package com.dsh.cyberware.network;
 
 import com.dsh.cyberware.Cyberware;
+import com.dsh.cyberware.core.CyberwareAbilities;
 import com.dsh.cyberware.menu.CyberwareStationService;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
@@ -13,11 +14,12 @@ public final class CyberwareNetwork {
     /**
      * 协议版本号：改了 payload 结构就往上加，避免旧客户端连新服务端出错。
      *
-     * <p>0.3.12 起 {@code CyberwareActionPayload} 多了 {@code defId} 字段 → 升到 {@code "2"}。
+     * <p>0.3.12 {@code CyberwareActionPayload} 多了 {@code defId} → {@code "2"}；
+     * 随后 {@code ActivatePayload} 从无参 record 改成带 {@code defId} 的 record → 升到 {@code "3"}。
      * 注意 NeoForge 的版本号是**按 channel（payload）**协商的（见 {@code NetworkPayloadSetup}），
      * 所以客户端 {@code CyberwareClient} 里那两个 S2C 包的 {@code "1"} 不受影响。
      */
-    public static final String PROTOCOL_VERSION = "2";
+    public static final String PROTOCOL_VERSION = "3";
 
     private CyberwareNetwork() {
     }
@@ -38,9 +40,33 @@ public final class CyberwareNetwork {
                 CyberwareNetwork::handleActivate);
     }
 
-    /** 激活手持义体：一切都以服务端手上那份数据为准，客户端只说「我按了键」。 */
+    /**
+     * 激活请求：按 {@code defId} 分流。
+     *
+     * <ul>
+     *   <li>空串（{@link ActivatePayload#HELD}）→ 手持激活，行为与 0.3.11 完全一致（V 键）；</li>
+     *   <li>非空 → 已安装表激活（R 键轮盘，t14）。</li>
+     * </ul>
+     *
+     * <p><b>客户端不可信</b>：{@code defId} 只说明「想激活哪一个」，
+     * 服务端不会因为客户端说了就照办 —— 是否真的装了那件义体，
+     * 由 {@link CyberwareAbilities#activateInstalled} 查**服务端的**已安装附件来裁决。
+     * 这里再挡一道非 {@link ServerPlayer}，保证客户端实体上的同步副本永远不会成为执行依据。
+     */
     private static void handleActivate(ActivatePayload payload, IPayloadContext context) {
-        context.enqueueWork(() -> com.dsh.cyberware.core.CyberwareAbilities.activateHeld(context.player()));
+        context.enqueueWork(() -> {
+            if (!(context.player() instanceof ServerPlayer serverPlayer)) {
+                Cyberware.LOGGER.debug("[cyberware] 忽略非服务端玩家的激活请求：{}", payload.defId());
+                return;
+            }
+            if (payload.defId().isEmpty()) {
+                // 手持激活（V 键）：看主手物品，行为不变
+                CyberwareAbilities.activateHeld(serverPlayer);
+                return;
+            }
+            // 指定型号激活（R 键轮盘）：服务端自己查已安装表
+            CyberwareAbilities.activateInstalled(serverPlayer, payload.defId());
+        });
     }
 
     /**

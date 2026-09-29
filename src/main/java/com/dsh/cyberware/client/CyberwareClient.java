@@ -56,6 +56,8 @@ public final class CyberwareClient {
     private static void onRegisterKeys(RegisterKeyMappingsEvent event) {
         event.registerCategory(CyberwareKeys.CATEGORY);
         event.register(CyberwareKeys.ACTIVATE);
+        // R 键轮盘：本任务（t13）只注册键位；触发逻辑（consumeClick → 打开轮盘）留给 t14。
+        event.register(CyberwareKeys.RADIAL);
     }
 
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
@@ -76,7 +78,13 @@ public final class CyberwareClient {
     /** 按键触发 → 发一句请求给服务端（服务端才是有权改数据的一方）。 */
     private static void onClientTick(ClientTickEvent.Post event) {
         while (CyberwareKeys.ACTIVATE.consumeClick()) {
-            ClientPacketDistributor.sendToServer(new ActivatePayload());
+            // V 键 = 手持激活：defId 用 HELD（空串），服务端行为与以前完全一致
+            ClientPacketDistributor.sendToServer(new ActivatePayload(ActivatePayload.HELD));
+        }
+        // R 键 = 义体轮盘（按住弹出、松开施放）。轮盘自己管后续关闭/发包，这里只负责开；
+        // openOrHint 内部会挡掉「界面已开着」和「一件主动义体都没有」两种情况。
+        while (CyberwareKeys.RADIAL.consumeClick()) {
+            CyberwareRadialScreen.openOrHint(Minecraft.getInstance());
         }
         SandevistanPostProcessor.tick();
 
