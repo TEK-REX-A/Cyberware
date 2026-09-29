@@ -9,6 +9,8 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.OrderedSubmitNodeCollector;
 import net.minecraft.client.renderer.SubmitNodeCollector;
 import net.minecraft.client.renderer.entity.LivingEntityRenderer;
+import net.minecraft.client.renderer.entity.layers.CapeLayer;
+import net.minecraft.client.renderer.entity.layers.HumanoidArmorLayer;
 import net.minecraft.client.renderer.entity.layers.RenderLayer;
 import net.minecraft.client.renderer.entity.state.AvatarRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
@@ -190,11 +192,18 @@ public final class AfterimageRenderer {
                 if (g == 0 && LAYER_LOGGED.compareAndSet(false, true)) {
                     System.out.println("[cyberware] 残影图层: collector=" + (layerCollector != null)
                             + " count=" + layers.size() + " -> " + layers.stream()
+                                    .map(l -> l.getClass().getSimpleName()).toList()
+                            + " | 残影保留=" + layers.stream()
+                                    .filter(AfterimageRenderer::isGhostLayer)
                                     .map(l -> l.getClass().getSimpleName()).toList());
                 }
                 if (layerCollector != null) {
                     model.setupAnim(ghost);
                     for (RenderLayer<LivingEntityRenderState, ?> layer : layers) {
+                        if (!isGhostLayer(layer)) {
+                            // 非白名单图层不进残影 —— 白名单与逐条理由见 GHOST-PERF.md §2
+                            continue;
+                        }
                         ((RenderLayer<LivingEntityRenderState, EntityModel<LivingEntityRenderState>>) layer)
                                 .submit(poseStack, layerCollector, ghost.lightCoords, ghost, ghost.yRot, ghost.xRot);
                     }
@@ -205,6 +214,36 @@ public final class AfterimageRenderer {
         } finally {
             ghostAlpha = 0.0F;
         }
+    }
+
+    /**
+     * <b>残影图层白名单</b>（t19 性能裁剪）—— 只有返回 true 的图层会进残影。
+     *
+     * <p>玩家渲染器实测挂着 10 个图层（真机日志 {@code AfterimageRenderer:191}）：
+     * {@code HumanoidArmorLayer, PlayerItemInHandLayer, ArrowLayer, Deadmau5EarsLayer, CapeLayer,
+     * CustomHeadLayer, WingsLayer, ParrotOnShoulderLayer, SpinAttackEffectLayer, BeeStingerLayer}。
+     * 每次残影渲染原本要把这 10 个全跑一遍，8 段残影就是 80 次图层回调。
+     *
+     * <p>保留下来的两个，判据是「**半透明确实生效** 且 **几乎所有玩家身上都有**」：
+     * <ul>
+     *   <li>{@link HumanoidArmorLayer} —— 护甲。走 {@code EquipmentLayerRenderer.renderLayers}，
+     *       已经被 {@code EquipmentLayerRendererMixin} 换成 {@code armorTranslucent} 并染上
+     *       {@code ghostAlpha}，是残影轮廓的视觉大头。</li>
+     *   <li>{@link CapeLayer} —— 披风。已经被 {@code CapeLayerMixin} 专门处理成半透明；
+     *       没披风的玩家在它内部第一行就 return，等于白拿。</li>
+     * </ul>
+     *
+     * <p>其余 8 个跳过。它们<b>不走</b>上面两条半透明通路（用物品/实体自己的渲染类型），
+     * 在半透明残影里会以**不透明的实心块**出现 —— 既是穿帮，又白付渲染成本；
+     * 而且都是「少数玩家才有 / 瞬时状态」：手持物品、头顶方块、身上的箭与蜂刺、
+     * deadmau5 耳朵、鹦鹉、鞘翅、三叉戟旋转特效。
+     *
+     * <p><b>要调整白名单就改这一个方法。</b>例如以后想让鞘翅也进残影
+     * （{@code WingsLayer} 确实走 {@code renderLayers}，半透明是生效的，只是只有鞘翅玩家才有）：
+     * 在此处 or 上 {@code || layer instanceof WingsLayer} 即可，其它地方不用动。
+     */
+    private static boolean isGhostLayer(RenderLayer<?, ?> layer) {
+        return layer instanceof HumanoidArmorLayer || layer instanceof CapeLayer;
     }
 
     /**
