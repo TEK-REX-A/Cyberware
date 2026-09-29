@@ -140,6 +140,29 @@ public final class SandevistanPostProcessor {
     }
 
     /**
+     * 换世界时清掉与本世界绑定的渲染状态（由 {@code CyberwareClient} 在检测到 Level 变化时调用）。
+     *
+     * <p>为什么要清：{@code pulseStartTick} 与上传给 shader 的 {@code gameTime} 都是**绝对游戏刻**，
+     * 新世界又从 0 开始；而 {@code intensity / previousIntensity / fovIntensity} 是上一世界的
+     * 残留值 —— 不清的话进新世界的第一帧会以旧强度闪一下屏幕特效。
+     *
+     * <p>**故意不清**这三个：
+     * <ul>
+     *   <li>{@code disabled}　—— 一次出错永久停用（清了会反复尝试已经坏掉的链）</li>
+     *   <li>{@code diagnosed} / {@code chainMissingLogged}　—— 一次性日志去重标志（清了会刷屏）</li>
+     * </ul>
+     * {@code RETIRED}（等几帧释放的 GPU buffer）也不动：它跟世界无关，清了反而可能提前回收。
+     */
+    public static void resetWorldState() {
+        intensity = 0.0F;
+        previousIntensity = 0.0F;
+        fovIntensity = 0.0F;
+        pulseStartTick = 0L;
+        wasActive = false;
+        lastUploaded = -1.0F;
+    }
+
+    /**
      * 帧结束前自己把后处理链跑一遍。
      *
      * <p><b>为什么不用 {@code FrameGraphSetupEvent}</b>：那个事件确实触发、

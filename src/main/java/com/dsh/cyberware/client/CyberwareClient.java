@@ -6,6 +6,7 @@ import com.dsh.cyberware.network.ActivatePayload;
 import com.dsh.cyberware.network.BerserkPayload;
 import com.dsh.cyberware.network.TimeDilationPayload;
 import com.dsh.cyberware.registry.ModMenus;
+import net.minecraft.world.level.Level;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
@@ -75,6 +76,14 @@ public final class CyberwareClient {
                         payload.damageMultiplier(), payload.active())));
     }
 
+    /**
+     * 上一次 tick 时所在的世界实例。
+     *
+     * <p>用来发现「换世界」。**不能只看 {@code level == null}**：从 A 世界直接进 B 世界时
+     * 引用换了、中间并没有经过 null（退出到标题 → 新建世界才会经过 null）。
+     */
+    private static Level lastLevel;
+
     /** 按键触发 → 发一句请求给服务端（服务端才是有权改数据的一方）。 */
     private static void onClientTick(ClientTickEvent.Post event) {
         while (CyberwareKeys.ACTIVATE.consumeClick()) {
@@ -86,20 +95,34 @@ public final class CyberwareClient {
         while (CyberwareKeys.RADIAL.consumeClick()) {
             CyberwareRadialScreen.openOrHint(Minecraft.getInstance());
         }
-        SandevistanPostProcessor.tick();
 
         Minecraft minecraft = Minecraft.getInstance();
-        if (minecraft.level == null) {
-            // 换维度/退出世界：这些时钟绑定的都是上一批对象
+
+        // ⚠ 换世界检测必须在**任何按世界时间轴做事的调用之前**（包括下面的 post 后处理 tick）：
+        //   客户端这几份静态状态全都记绝对游戏刻（endTick / pulseStartTick / lastRealTick），
+        //   新世界的 gameTime 从 0 重算 —— 旧账于是变成「几万秒后才结束」。
+        //   真机 P0 现场：新建世界后 HUD 直接显示 Sandevistan 16181.0s / Berserk 16059.7s。
+        if (minecraft.level != lastLevel) {
+            lastLevel = minecraft.level;
+            ClientTimeDilation.clear();
+            BerserkClientState.clear();
+            SandevistanPostProcessor.resetWorldState();
             ParticleTickClock.clear();
             WeatherTickClock.reset();
             AfterimageHistory.clear();
-        } else {
-            double timeScale = ClientTimeDilation.timeScaleAt(
-                    minecraft.player == null ? 0.0D : minecraft.player.getX(),
-                    minecraft.player == null ? 0.0D : minecraft.player.getY(),
-                    minecraft.player == null ? 0.0D : minecraft.player.getZ());
-            WeatherTickClock.tick((int) minecraft.level.getGameTime(), timeScale);
         }
+
+        SandevistanPostProcessor.tick();
+
+        Level level = minecraft.level;
+        if (level == null) {
+            // 退出世界：没有世界可以推进（上面的换世界分支已经清过一轮）
+            return;
+        }
+        double timeScale = ClientTimeDilation.timeScaleAt(
+                minecraft.player == null ? 0.0D : minecraft.player.getX(),
+                minecraft.player == null ? 0.0D : minecraft.player.getY(),
+                minecraft.player == null ? 0.0D : minecraft.player.getZ());
+        WeatherTickClock.tick((int) level.getGameTime(), timeScale);
     }
 }

@@ -54,6 +54,20 @@ public final class ClientTimeDilation {
 
     private static final List<Source> SOURCES = new ArrayList<>();
 
+    /**
+     * 清空所有减速源（换世界时调用）。
+     *
+     * <p>源里记的是**绝对游戏刻**（{@code endTick}），而 {@code level.getGameTime()}
+     * 是每个世界各自从 0 开始的。换世界后旧的 endTick 会变成「几万秒后才结束」：
+     * HUD 直接显示 {@code 16181.0s}、进度被 clamp 到 100%（真机 P0 截图）。
+     *
+     * <p>注意：**不能指望"自然过期"**—— 新世界的 now 远小于旧 endTick，
+     * {@code now >= endTick} 这个条件要等好几个小时才成立。所以必须显式清。
+     */
+    public static void clear() {
+        SOURCES.clear();
+    }
+
     /** 本地玩家自身的位置匹配容差（格）。用于把「我自己」从动画减速里摘出去。 */
     private static final double SELF_EPSILON = 0.08D;
 

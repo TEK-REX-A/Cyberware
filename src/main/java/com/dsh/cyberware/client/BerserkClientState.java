@@ -18,6 +18,23 @@ public final class BerserkClientState {
     private BerserkClientState() {
     }
 
+    /**
+     * 清空全部状态（换世界时调用）。
+     *
+     * <p>这里同样按**绝对游戏刻**记账（{@code endTick}），新世界的 gameTime 从 0 起，
+     * 于是 {@code endTick - now} 变成几万秒、{@code progress()} 被 clamp 到 100%
+     * （真机 P0 截图 {@code Berserk 100% 16059.7s}）。
+     *
+     * <p>而且服务端发的 {@code active=false} 也救不了：下面的防抖判断
+     * {@code now >= endTick} 在新世界里同样不成立 —— 所以必须从这个方法硬清。
+     */
+    public static void clear() {
+        endTick = 0L;
+        totalTicks = 0L;
+        damageMultiplier = 1.0F;
+        active = false;
+    }
+
     public static void onPayload(int remainingTicks, int totalTicks, float multiplier, boolean isActive) {
         long now = now();
         if (!isActive) {

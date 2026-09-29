@@ -57,7 +57,8 @@ public final class BerserkHandler {
             if (BerserkManager.isActive(player)) {
                 broadcast(player);
             } else {
-                BerserkManager.prune(level);
+                // prune() 不再需要 level 参数：过期判断一律用每条记录**自己的**世界时钟
+                BerserkManager.prune();
             }
         }
     }

@@ -1,5 +1,6 @@
 package com.dsh.cyberware.core;
 
+import java.lang.ref.WeakReference;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -43,7 +44,19 @@ public final class TimeDilationManager {
         private double x;
         private double y;
         private double z;
-        private net.minecraft.resources.ResourceKey<Level> dimension;
+        /**
+         * 这条记录属于**哪个世界实例**。
+         *
+         * <p>0.3.11 记的是 {@code dimension()}（维度键），那**挡不住换世界**：
+         * 新建出来的世界维度键还是 {@code minecraft:overworld}，可它的 {@code gameTime}
+         * 从 0 重新算 —— 旧的 {@code expireAt} 于是变成「几小时后才过期」，
+         * 减速/狂暴在新世界里继续**真生效**（真机 P0：HUD 显示 16181s）。
+         * 只有 Level **实例**身份才能区分「同一个维度键的两个不同世界」。
+         *
+         * <p>用弱引用：这张表是静态的，不能让一个已卸载的世界被它钉在内存里；
+         * 弱引用被回收也正好当作「这个世界已经没了」的判据（见 {@link #ownerLevel}）。
+         */
+        private WeakReference<Level> levelRef;
     }
 
     /**
@@ -68,7 +81,10 @@ public final class TimeDilationManager {
         if (a != null && a.owner == null) {
             a.owner = player.getUUID();
         }
-        if (a != null && now < a.expireAt) {
+        // ⚠ 只有「同一个世界实例里还没过期」才允许续期。
+        //   否则（换了世界）旧 expireAt 是**旧世界**的刻数，续期就等于把几小时的减速
+        //   原封不动搬到新世界 —— 必须当成全新一条重开。
+        if (a != null && belongsTo(a, level) && now < a.expireAt) {
             // 已在生效：取更强，时限取更晚
             if (clamped > a.ratio) {
                 a.ratio = clamped;
@@ -87,9 +103,35 @@ public final class TimeDilationManager {
         a.x = player.getX();
         a.y = player.getY();
         a.z = player.getZ();
-        a.dimension = level.dimension();
+        a.levelRef = new WeakReference<>(level);
 
         broadcast(level, a, durationTicks);
+    }
+
+    // ------------------------------------------------------------------
+    // 世界归属判定 —— 所有查询都必须过这一关
+    // ------------------------------------------------------------------
+
+    /** 这条记录属于给定的世界**实例**吗（弱引用已被回收 = 世界没了 → 否）。 */
+    private static boolean belongsTo(Activation a, Level level) {
+        return a != null && level != null && a.levelRef != null && a.levelRef.get() == level;
+    }
+
+    /** 记录所属的世界；世界已卸载（或无记录）返回 null。 */
+    private static Level ownerLevel(Activation a) {
+        return a == null || a.levelRef == null ? null : a.levelRef.get();
+    }
+
+    /**
+     * 这条记录在给定世界里**此刻**是否真的在生效。
+     *
+     * <p>两道判定缺一不可：
+     * ① 世界实例必须一致 —— 换世界后旧记录一律视为不存在（不看事件、不看时机，天生失效）；
+     * ② 在**它自己的**世界时间轴上还没过期 —— 不同维度/不同世界的 gameTime 是不同时间轴，
+     * 拿 A 世界的 now 去比 B 世界的 expireAt 本身就是错的。
+     */
+    private static boolean liveIn(Activation a, Level level) {
+        return belongsTo(a, level) && level.getGameTime() < a.expireAt;
     }
 
     /**
@@ -106,7 +148,8 @@ public final class TimeDilationManager {
         double scale = 1.0D;
 
         for (Activation a : ACTIVE.values()) {
-            if (now >= a.expireAt || a.dimension == null || !a.dimension.equals(level.dimension())) {
+            // 换世界 / 维度不符 / 已过期 → 不算数（旧代码只查了 dimension()，挡不住换世界）
+            if (!liveIn(a, level)) {
                 continue;
             }
             // 自己与坐骑豁免
@@ -142,12 +185,9 @@ public final class TimeDilationManager {
         if (player == null) {
             return false;
         }
-        Activation a = ACTIVE.get(player.getUUID());
-        if (a == null || a.owner == null) {
-            return false;
-        }
-        Level level = player.level();
-        return level != null && level.getGameTime() < a.expireAt;
+        // 之前这里只比 gameTime —— 换世界后旧 expireAt 大于新世界的 now，
+        // 「自己还在减速中」会一直成立，击杀延长也就一直给。现在按世界实例判。
+        return liveIn(ACTIVE.get(player.getUUID()), player.level());
     }
 
     /**
@@ -161,12 +201,9 @@ public final class TimeDilationManager {
         if (player == null || extraTicks <= 0) {
             return 0;
         }
-        Activation a = ACTIVE.get(player.getUUID());
-        if (a == null || a.owner == null) {
-            return 0;
-        }
         Level level = player.level();
-        if (level == null || level.getGameTime() >= a.expireAt) {
+        Activation a = ACTIVE.get(player.getUUID());
+        if (a == null || a.owner == null || !liveIn(a, level)) {
             return 0;
         }
         int room = limitTicks - a.extended;
@@ -194,9 +231,11 @@ public final class TimeDilationManager {
 
     /** 是否还有任何激活源在生效（UI/HUD 用）。 */
     public static boolean active(Level level) {
-        long now = level == null ? 0L : level.getGameTime();
+        if (level == null) {
+            return false;
+        }
         for (Activation a : ACTIVE.values()) {
-            if (now < a.expireAt) {
+            if (liveIn(a, level)) {
                 return true;
             }
         }
@@ -208,14 +247,34 @@ public final class TimeDilationManager {
      *
      * <p>不做这一步，客户端手里的中心点还停在激活那一刻 —— 玩家一移动，
      * HUD 和边缘特效就会因为「自己已经不在区域内」而凭空消失。
+     *
+     * <p>顺手做两件清理（每 20 刻跑一次，开销可忽略）：
+     * ① 所属世界已被卸载（弱引用被回收）的记录删掉；
+     * ② 本世界已经过期的记录删掉。
+     * 别的世界/维度的记录一律**不动** —— 它们要在自己的时间轴上继续生效。
      */
     public static void refresh(Level level) {
         if (!(level instanceof net.minecraft.server.level.ServerLevel serverLevel) || ACTIVE.isEmpty()) {
             return;
         }
         long now = serverLevel.getGameTime();
-        for (Activation a : ACTIVE.values()) {
-            if (now >= a.expireAt || a.owner == null) {
+        Iterator<Map.Entry<UUID, Activation>> it = ACTIVE.entrySet().iterator();
+        while (it.hasNext()) {
+            Activation a = it.next().getValue();
+            if (ownerLevel(a) == null) {
+                // 世界已经卸载：这条记录不可能再生效，顺手清掉
+                it.remove();
+                continue;
+            }
+            if (!belongsTo(a, serverLevel)) {
+                // 别的世界 / 别的维度：它的时间轴与玩家列表都不在这一个 level 上
+                continue;
+            }
+            if (now >= a.expireAt) {
+                it.remove();
+                continue;
+            }
+            if (a.owner == null) {
                 continue;
             }
             Player ownerPlayer = serverLevel.getPlayerByUUID(a.owner);
@@ -229,17 +288,25 @@ public final class TimeDilationManager {
         }
     }
 
-    /** 清理过期记录。 */
-    public static void prune(Level level) {
-        long now = level == null ? 0L : level.getGameTime();
+    /**
+     * 清理记录：所属世界已卸载的，以及在**各自**世界时间轴上已过期的。
+     *
+     * <p>0.3.11 的版本是「拿传进来的 level 的 gameTime 去比所有记录的 expireAt」，
+     * 那在跨维度时本身就是错的（不同维度时间轴不同），删错/不删都可能发生。
+     * 参数因此不再需要（记录自己知道属于哪个世界），调用方只有 0 处。
+     */
+    public static void prune() {
         Iterator<Map.Entry<UUID, Activation>> it = ACTIVE.entrySet().iterator();
         while (it.hasNext()) {
-            if (now >= it.next().getValue().expireAt) {
+            Activation a = it.next().getValue();
+            Level owned = ownerLevel(a);
+            if (owned == null || owned.getGameTime() >= a.expireAt) {
                 it.remove();
             }
         }
     }
 
+    /** 全清。注意：换世界**不再依赖**它（见 {@link #liveIn}），这里留给调试命令用。 */
     public static void clear() {
         ACTIVE.clear();
     }
