@@ -3,6 +3,7 @@ package com.dsh.cyberware.menu;
 import com.dsh.cyberware.block.CyberwareStationBlockEntity;
 import com.dsh.cyberware.registry.ModComponents;
 import com.dsh.cyberware.registry.ModMenus;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -28,6 +29,25 @@ public class CyberwareStationMenu extends AbstractContainerMenu {
 
     /** 升级按钮的 id（需求书【六.6】要求在 clickMenuButton 里处理） */
     public static final int BUTTON_UPGRADE = 0;
+
+    /**
+     * 安装按钮 id：{@code BUTTON_INSTALL_BASE + 操作台义体槽下标}。
+     *
+     * <p>原版按钮包（{@code ServerboundContainerButtonClickPacket}）只能带一个 int，
+     * 所以「装第几个槽」直接编进 id 里。
+     */
+    public static final int BUTTON_INSTALL_BASE = BUTTON_UPGRADE + 1;
+
+    /**
+     * 卸载按钮 id：{@code BUTTON_UNINSTALL_BASE + 已装义体下标}。
+     *
+     * <p>下标走 {@link com.dsh.cyberware.core.CyberwareInstallation#orderedIds()} 的确定性顺序
+     * （按 id 字典序），这样两端算出来的「第 N 件」一定是同一件。
+     */
+    public static final int BUTTON_UNINSTALL_BASE = BUTTON_INSTALL_BASE + IMPLANT_SLOT_COUNT;
+
+    /** 卸载按钮最多支持这么多件（与义体槽数量一致，够用又不会无限膨胀）。 */
+    public static final int MAX_BUTTON_UNINSTALL = IMPLANT_SLOT_COUNT;
 
     // 布局对齐 CyberwareStationScreen：义体槽排在面板底部的一条里
     private static final int IMPLANT_COLS = 10;
@@ -118,14 +138,29 @@ public class CyberwareStationMenu extends AbstractContainerMenu {
     }
 
     /**
-     * 升级按钮。需求书【六.6】要求在 clickMenuButton 里处理并扣除材料。
-     * 第一步只搭框架，具体扣料与成功率判定在后续步骤接入。
+     * 原版按钮路径：客户端 {@code gameMode.handleInventoryButtonClick(containerId, id)}
+     * → 服务端本方法。安装/卸载都只是「请求」，真正的校验与数据变更在
+     * {@link CyberwareStationService} 里。
+     *
+     * <p>26.x 里这个方法<b>只在服务端被调用</b>（{@code ServerGamePacketListenerImpl
+     * #handleContainerButtonClick}）；这里再挡一道 {@code ServerPlayer}，
+     * 保证客户端本地菜单永远不可能改到玩家数据。
      */
     @Override
     public boolean clickMenuButton(Player player, int id) {
+        if (!(player instanceof ServerPlayer serverPlayer)) {
+            return false;
+        }
         if (id == BUTTON_UPGRADE) {
-            // TODO(第二步/第六步): 校验材料 → 按配置成功率判定 → 提升槽位内义体稀有度
-            return true;
+            return CyberwareStationService.upgrade(serverPlayer, this.containerId, -1);
+        }
+        if (id >= BUTTON_INSTALL_BASE && id < BUTTON_INSTALL_BASE + IMPLANT_SLOT_COUNT) {
+            return CyberwareStationService.install(serverPlayer, this.containerId, id - BUTTON_INSTALL_BASE);
+        }
+        if (id >= BUTTON_UNINSTALL_BASE && id < BUTTON_UNINSTALL_BASE + MAX_BUTTON_UNINSTALL) {
+            // 按钮只有 int：卸载走 orderedIds() 的确定性下标
+            return CyberwareStationService.uninstall(serverPlayer, this.containerId, "",
+                    id - BUTTON_UNINSTALL_BASE);
         }
         return false;
     }

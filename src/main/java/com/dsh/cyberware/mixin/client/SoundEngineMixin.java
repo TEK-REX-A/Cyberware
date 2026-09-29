@@ -25,7 +25,7 @@ public class SoundEngineMixin {
     /** 再低就会变成怪声，兜住下限。 */
     private static final float PITCH_FLOOR = 0.25F;
 
-    @Inject(method = "calculatePitch", at = @At("RETURN"), cancellable = true)
+    @Inject(method = "calculatePitch", at = @At("RETURN"), cancellable = true, require = 0)
     private void cyberware$lowerPitchWhileSlowed(SoundInstance instance, CallbackInfoReturnable<Float> cir) {
         float ratio = ClientTimeDilation.ratioNow();
         if (ratio <= 0.01F) {

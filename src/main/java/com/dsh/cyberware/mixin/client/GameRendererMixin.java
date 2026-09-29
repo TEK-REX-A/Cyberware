@@ -43,7 +43,8 @@ public class GameRendererMixin {
                     value = "INVOKE",
                     target = "Lnet/minecraft/client/renderer/LevelRenderer;doEntityOutline()V",
                     shift = At.Shift.AFTER
-            )
+            ),
+            require = 0
     )
     private void cyberware$applyPostEffect(DeltaTracker deltaTracker, boolean advanceGameTime, CallbackInfo ci) {
         SandevistanPostProcessor.applyPostProcess(this.resourcePool);

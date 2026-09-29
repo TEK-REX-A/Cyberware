@@ -13,7 +13,8 @@
     "client.GameRendererMixin",
     "client.LivingEntityRendererAccessor",
     "client.EquipmentLayerRendererMixin",
-    "client.CapeLayerMixin"
+    "client.CapeLayerMixin",
+    "client.EntityRendererOutlineMixin"
   ],
   "injectors": {
     "defaultRequire": 1

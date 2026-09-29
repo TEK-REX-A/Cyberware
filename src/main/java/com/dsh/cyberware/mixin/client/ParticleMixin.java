@@ -43,7 +43,7 @@ public abstract class ParticleMixin {
     /** 每个粒子自己的寿命补偿累加器（WeakHashMap 太慢，用粒子字段装不下，这里走静态表）。 */
     private static final java.util.Map<Particle, double[]> CYBERWARE$AGE = new java.util.WeakHashMap<>();
 
-    @Inject(method = "tick", at = @At("RETURN"))
+    @Inject(method = "tick", at = @At("RETURN"), require = 0)
     private void cyberware$slowDownParticle(CallbackInfo ci) {
         Particle self = (Particle) (Object) this;
         double timeScale = ClientTimeDilation.timeScaleAt(this.x, this.y, this.z);

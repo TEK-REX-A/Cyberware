@@ -4,6 +4,7 @@ import com.dsh.cyberware.menu.CyberwareStationMenu;
 import com.dsh.cyberware.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.world.Containers;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
@@ -39,5 +40,21 @@ public class CyberwareStationBlockEntity extends BlockEntity implements MenuProv
     @Override
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInventory, Player player) {
         return new CyberwareStationMenu(containerId, playerInventory, this);
+    }
+
+    /**
+     * 方块被破坏时把义体槽里的东西吐出来。
+     *
+     * <p>原版 {@link BlockEntity#preRemoveSideEffects} 只会自动处理
+     * 「方块实体自己就是 {@code Container}」的情况，本 BE 是**持有**一个容器，
+     * 不覆盖这条路的话，玩家放在槽里的义体（以及卸载归还的物品）会随方块一起蒸发。
+     * 卸载优先把物品还到这些槽位，所以这个覆盖是必要的配套。
+     */
+    @Override
+    public void preRemoveSideEffects(BlockPos pos, BlockState state) {
+        super.preRemoveSideEffects(pos, state);
+        if (this.level != null && !this.level.isClientSide()) {
+            Containers.dropContents(this.level, pos, this.implantSlots);
+        }
     }
 }

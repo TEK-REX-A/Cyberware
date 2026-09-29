@@ -1,13 +1,18 @@
 package com.dsh.cyberware.core;
 
+import com.dsh.cyberware.config.CyberwareConfig;
 import com.dsh.cyberware.data.CyberwareData;
+import com.dsh.cyberware.registry.ModAttachments;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.MapCodec;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.entity.player.Player;
 
 /**
  * <b>玩家身上装了哪些义体</b> —— 义体系统的地基。
@@ -82,6 +87,18 @@ public record CyberwareInstallation(Map<String, CyberwareData> installed) {
     }
 
     /**
+     * 已装型号 id 的**稳定顺序**列表（按 id 字典序）。
+     *
+     * <p>{@link Map#copyOf} 不保证迭代顺序，而 UI / 按钮 / 网络包都想用「第 N 件」指代某件义体，
+     * 所以这里给出一个两端一致的确定性顺序 —— 服务端与客户端算出来的结果必须相同。
+     */
+    public List<String> orderedIds() {
+        List<String> ids = new ArrayList<>(this.installed.keySet());
+        ids.sort(java.util.Comparator.naturalOrder());
+        return List.copyOf(ids);
+    }
+
+    /**
      * 已占用的植入容量。
      *
      * <p>按每件的稀有度取对应变体的 capacity 求和；查不到的型号（旧存档里被删掉的）
@@ -100,5 +117,61 @@ public record CyberwareInstallation(Map<String, CyberwareData> installed) {
             }
         }
         return total;
+    }
+
+    // ------------------------------------------------------------------
+    // 静态查询 API —— 效果系统（义眼描边、被动加成）与操作台共用这一套入口
+    // ------------------------------------------------------------------
+
+    /** 需求书给玩家的默认总容量上限；配置项 {@code capacity.defaultCapacity} 的缺省值也是 100。 */
+    public static final int MAX_TOTAL_CAPACITY = 100;
+
+    /**
+     * 取某玩家身上的义体表 —— <b>永远不返回 null</b>。
+     *
+     * <p>用 {@code getExistingDataOrNull} 而不是 {@code getData}：没装过义体的玩家
+     * 不该被动多挂一份空表（原版实体附件是按需创建的）。
+     */
+    public static CyberwareInstallation of(Player player) {
+        if (player == null) {
+            return EMPTY;
+        }
+        CyberwareInstallation inst = player.getExistingDataOrNull(ModAttachments.INSTALLATION.get());
+        return inst == null ? EMPTY : inst;
+    }
+
+    /** 玩家身上有没有这件义体（被动效果 / 义眼敌我识别都靠它判断）。 */
+    public static boolean has(Player player, String defId) {
+        return defId != null && of(player).installed().containsKey(defId);
+    }
+
+    /** 取某玩家身上某件义体的稀有度与等级；没装返回 null。 */
+    public static CyberwareData dataOf(Player player, String defId) {
+        return defId == null ? null : of(player).installed().get(defId);
+    }
+
+    /** 静态便捷版：某玩家已占用的植入容量。 */
+    public static int usedCapacity(Player player) {
+        return of(player).usedCapacity();
+    }
+
+    /**
+     * 玩家总容量上限。
+     *
+     * <p>配置里关掉了容量限制就返回 {@link Integer#MAX_VALUE}（调试用「无限安装」）；
+     * 配置值非法时回落到 {@link #MAX_TOTAL_CAPACITY}。
+     */
+    public static int capacityLimit() {
+        if (!CyberwareConfig.ENABLE_CAPACITY_LIMIT.get()) {
+            return Integer.MAX_VALUE;
+        }
+        int configured = CyberwareConfig.DEFAULT_CAPACITY.get();
+        return configured > 0 ? configured : MAX_TOTAL_CAPACITY;
+    }
+
+    /** 剩余可用容量；上限未启用时为 {@link Integer#MAX_VALUE}。 */
+    public static int remainingCapacity(Player player) {
+        int limit = capacityLimit();
+        return limit == Integer.MAX_VALUE ? Integer.MAX_VALUE : Math.max(0, limit - usedCapacity(player));
     }
 }

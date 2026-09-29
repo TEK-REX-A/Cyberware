@@ -1,0 +1,130 @@
+# ASSET-WHITELIST.txt —— 有素材的定义 id（t2 archivist 产出）
+# 判定依据：/sdcard/DSH/义体/ID对照.txt（CET 物品ID→中文名）、待插入-123条定义.txt、描述.txt、定义表 CyberwareDefinitions.java、lang/en_us.json
+# 语义：本文件列出的定义都有对应的 32x32 贴图 + models/item/<id>.json + items/<id>.json，应保留。
+# 计数：123 条。映射时定义表共 154 条 = 白名单 123 + 无素材 19 + 主人已裁决删除 12；numbersmith 已删除那 12 条，当前定义表 142 条 = 本表 123 + 无素材 19。
+# 行号基准：定义表行号取自 t1 baseline b0aabeeabbc1f2dcb46e649a72c9736678b1bb9d；删除 12 条后行号已整体偏移，请按 id 对齐。
+# 行格式：<id>  # <槽位> | <定义表行号> | 出处 | 素材来源
+
+adaptive_stem_cells  # INTEGUMENTARY | 定义表L888 | 定义表L888 ID对照L82 名称逐字相同 | 素材: /sdcard/DSH/义体/细胞适配.png
+agile_joints  # SKELETON | 定义表L1042 | 定义表L1042 ID对照L104 名称逐字相同 | 素材: /sdcard/DSH/义体/弹性关节.png
+arasaka_shadow_mkv  # OPERATING_SYSTEM | 定义表L629 | cyberdeck_arasaka_4=定义表L244/lang"Arasaka Cyberdeck Mk.4"（任务指派目标）；arasaka_shadow_mkv=定义表L629/待插入L303/ID对照L45；描述L84 荒坂1~5型 同一产品线 | 素材: /sdcard/DSH/网络接入舱/荒板.png [一图多用]
+berserk_c1  # OPERATING_SYSTEM | 定义表L657 | 定义表L657 待插入L331 ID对照L49；描述L49 摩尔科技狂暴；完整名称.txt L8 | 素材: /sdcard/DSH/斯安威斯坦/摩尔科技狂暴.png
+berserk_c2  # OPERATING_SYSTEM | 定义表L664 | 定义表L664 待插入L338 ID对照L50；描述L40 生物动力狂暴；完整名称.txt L7 | 素材: /sdcard/DSH/斯安威斯坦/生物动力狂暴.png
+berserk_c3  # OPERATING_SYSTEM | 定义表L671 | 定义表L671 待插入L345 ID对照L51；描述L51 泽塔科技狂暴；完整名称.txt L9 | 素材: /sdcard/DSH/斯安威斯坦/泽塔科技狂暴.png
+berserk_c4  # OPERATING_SYSTEM | 定义表L363 | 定义表L363 待插入L37 ID对照L7；描述L36 军用科技狂暴；完整名称.txt L10（后缀 x=神话级） | 素材: /sdcard/DSH/斯安威斯坦/军用科技狂暴.png
+biomonitor  # CIRCULATORY | 定义表L783 | 定义表L783 ID对照L67 名称逐字相同 | 素材: /sdcard/DSH/义体/生物监测.png
+biotech_sigma_mkiv  # OPERATING_SYSTEM | 定义表L615 | biotech_sigma_mkiv=定义表L615/待插入L289/ID对照L43；描述L92 生物技术Σ 1~4型；lang en_us cyberdeck_biotech_1/2="Biotech Sigma Mk.1/2" 同一产品线 | 素材: /sdcard/DSH/网络接入舱/生物技术Σ.png [一图多用]
+blood_depleter  # INTEGUMENTARY | 定义表L916 | 定义表L916 ID对照L86 名称逐字相同 | 素材: /sdcard/DSH/义体/疼痛置换.png
+blood_pump  # CIRCULATORY | 定义表L818 | 定义表L818 ID对照L72 名称逐字相同 | 素材: /sdcard/DSH/义体/活血泵.png
+bone_marrow_cells  # SKELETON | 定义表L1084 | 定义表L1084 ID对照L110 名称逐字相同 | 素材: /sdcard/DSH/义体/动能骨架.png
+boosted_tendons  # LEGS | 定义表L853 | 定义表L853 ID对照L77 主人已确认异写 强化肌腱=强化肌健 | 素材: /sdcard/DSH/义体/强化肌腱.png
+boring_plating  # INTEGUMENTARY | 定义表L895 | 定义表L895 ID对照L83 名称逐字相同 | 素材: /sdcard/DSH/义体/皮下护甲.png
+camillo_ram_manager  # FRONTAL_CORTEX | 定义表L1126 | camillo_ram_manager=定义表L1126/ID对照L116 逐字相同；iconic_camillo_ram_manager=定义表L475/ID对照L23 主人已确认异写 卡米略RAM管理器=RAM配平；一图多用 | 素材: /sdcard/DSH/义体/卡米略RAM管理器.png [一图多用]
+capacity_booster  # OPERATING_SYSTEM | 定义表L328 | 定义表L328 ID对照L2 主人已确认异写 装植缩减=装殖缩减；描述L130 上游文档另作「装植减缩」，同一物品三处书写不同 | 素材: /sdcard/DSH/义体/装植缩减.png
+cat_paws  # LEGS | 定义表L860 | 定义表L860 ID对照L78 名称逐字相同 | 素材: /sdcard/DSH/义体/猞猁爪.png
+catch_me_if_you_can  # CIRCULATORY | 定义表L811 | 定义表L811 ID对照L71 主人已确认异写 风险规避=风险归避 | 素材: /sdcard/DSH/义体/风险规避.png
+charge_system  # INTEGUMENTARY | 定义表L923 | 定义表L923 ID对照L87 名称逐字相同 | 素材: /sdcard/DSH/义体/拒敌防护.png
+cogito_frame  # INTEGUMENTARY | 定义表L881 | 定义表L881 ID对照L81 名称逐字相同 | 素材: /sdcard/DSH/义体/思想防线.png
+compiling_skeleton  # SKELETON | 定义表L1063 | 定义表L1063 ID对照L107 名称逐字相同 | 素材: /sdcard/DSH/义体/RAM补偿.png
+cyber_rotors  # CIRCULATORY | 定义表L846 | 定义表L846 ID对照L76 名称逐字相同 | 素材: /sdcard/DSH/义体/微型转子.png
+cyberdeck_arasaka_3  # OPERATING_SYSTEM | 定义表L236 | cyberdeck_arasaka_4=定义表L244/lang"Arasaka Cyberdeck Mk.4"（任务指派目标）；arasaka_shadow_mkv=定义表L629/待插入L303/ID对照L45；描述L84 荒坂1~5型 同一产品线 | 素材: /sdcard/DSH/网络接入舱/荒板.png [一图多用]
+cyberdeck_arasaka_4  # OPERATING_SYSTEM | 定义表L244 | cyberdeck_arasaka_4=定义表L244/lang"Arasaka Cyberdeck Mk.4"（任务指派目标）；arasaka_shadow_mkv=定义表L629/待插入L303/ID对照L45；描述L84 荒坂1~5型 同一产品线 | 素材: /sdcard/DSH/网络接入舱/荒板.png [一图多用]
+cyberdeck_biodyne_1  # OPERATING_SYSTEM | 定义表L134 | cyberdeck_biodyne_1=定义表L134/lang"Biodyne Cyberdeck Mk.1"；cyberdeck_biodyne_2=定义表L142/lang"Biodyne Cyberdeck Mk.2"；素材名只给品牌不含等级 | 素材: /sdcard/DSH/网络接入舱/生物动力.png [一图多用]
+cyberdeck_biodyne_2  # OPERATING_SYSTEM | 定义表L142 | cyberdeck_biodyne_1=定义表L134/lang"Biodyne Cyberdeck Mk.1"；cyberdeck_biodyne_2=定义表L142/lang"Biodyne Cyberdeck Mk.2"；素材名只给品牌不含等级 | 素材: /sdcard/DSH/网络接入舱/生物动力.png [一图多用]
+cyberdeck_biotech_1  # OPERATING_SYSTEM | 定义表L150 | biotech_sigma_mkiv=定义表L615/待插入L289/ID对照L43；描述L92 生物技术Σ 1~4型；lang en_us cyberdeck_biotech_1/2="Biotech Sigma Mk.1/2" 同一产品线 | 素材: /sdcard/DSH/网络接入舱/生物技术Σ.png [一图多用]
+cyberdeck_biotech_2  # OPERATING_SYSTEM | 定义表L158 | biotech_sigma_mkiv=定义表L615/待插入L289/ID对照L43；描述L92 生物技术Σ 1~4型；lang en_us cyberdeck_biotech_1/2="Biotech Sigma Mk.1/2" 同一产品线 | 素材: /sdcard/DSH/网络接入舱/生物技术Σ.png [一图多用]
+cyberdeck_dongyue_1  # OPERATING_SYSTEM | 定义表L100 | cyberdeck_dongyue_1=定义表L100/lang"Dongyue Cyberdeck Mk.1"；cyberdeck_tinkerer_3=定义表L108/lang"Tinkerer Cyberdeck Mk.3"；描述L120「冬月电子修补匠被移除后唯二的不朽网络接入仓」——「冬月电子修补匠」= Dongyue + Tinkerer 同一产品线的合成叫法 | 素材: /sdcard/DSH/网络接入舱/冬月修补匠.png [一图多用]
+cyberdeck_netwatch_5  # OPERATING_SYSTEM | 定义表L265 | cyberdeck_netwatch_5=定义表L265/lang"Netwatch Netdriver Mk.5"（任务指派目标）；netwatch_netdriver_mk=定义表L342/待插入L16/ID对照L4；描述L114 网络监察网驱1型 同一产品线 | 素材: /sdcard/DSH/网络接入舱/网络监察网驱.png [一图多用]
+cyberdeck_raven_4  # OPERATING_SYSTEM | 定义表L273 | cyberdeck_raven_4=定义表L273/lang"Raven Microcyber Mk.4"（任务指派目标）；raven_microcyber_mkiii=定义表L622/待插入L296/ID对照L44；描述L121 乌鸦微控1~3型 同一产品线 | 素材: /sdcard/DSH/网络接入舱/乌鸦微控.png [一图多用]
+cyberdeck_ripple_4  # OPERATING_SYSTEM | 定义表L227 | cyberdeck_ripple_4=定义表L227/lang"Tetratronic Rippler Mk.4"（任务指派目标）；tetratronic_rippler_mkv=定义表L608/待插入L282/ID对照L42；描述L126 四相传电涟漪1~5型 同一产品线；lang en_us tetratronic_1/2/3="Tetratronic Cyberdeck Mk.1/2/3" | 素材: /sdcard/DSH/网络接入舱/四相传电.png [一图多用]
+cyberdeck_ruicao_1  # OPERATING_SYSTEM | 定义表L117 | cyberdeck_ruicao_1=定义表L117/lang"Ruicao Cyberdeck Mk.1"；cyberdeck_ruicao_2=定义表L125/lang"Ruicao Cyberdeck Mk.2"；素材名只给品牌不含等级 | 素材: /sdcard/DSH/网络接入舱/瑞草电子.png [一图多用]
+cyberdeck_ruicao_2  # OPERATING_SYSTEM | 定义表L125 | cyberdeck_ruicao_1=定义表L117/lang"Ruicao Cyberdeck Mk.1"；cyberdeck_ruicao_2=定义表L125/lang"Ruicao Cyberdeck Mk.2"；素材名只给品牌不含等级 | 素材: /sdcard/DSH/网络接入舱/瑞草电子.png [一图多用]
+cyberdeck_technica_2  # OPERATING_SYSTEM | 定义表L176 | cyberdeck_technica_2/3/4=定义表L176/定义表L185/定义表L194，lang en_us = "Stephenson Tech Mk.2/3/4"（斯蒂文森技术=Stephenson Tech，官方英文名直接对上）；仓库内三者贴图 md5 相同(511d8421…) | 素材: /sdcard/DSH/网络接入舱/斯蒂文森技术.png [一图多用]
+cyberdeck_technica_3  # OPERATING_SYSTEM | 定义表L185 | cyberdeck_technica_2/3/4=定义表L176/定义表L185/定义表L194，lang en_us = "Stephenson Tech Mk.2/3/4"（斯蒂文森技术=Stephenson Tech，官方英文名直接对上）；仓库内三者贴图 md5 相同(511d8421…) | 素材: /sdcard/DSH/网络接入舱/斯蒂文森技术.png [一图多用]
+cyberdeck_technica_4  # OPERATING_SYSTEM | 定义表L194 | cyberdeck_technica_2/3/4=定义表L176/定义表L185/定义表L194，lang en_us = "Stephenson Tech Mk.2/3/4"（斯蒂文森技术=Stephenson Tech，官方英文名直接对上）；仓库内三者贴图 md5 相同(511d8421…) | 素材: /sdcard/DSH/网络接入舱/斯蒂文森技术.png [一图多用]
+cyberdeck_tetratronic_1  # OPERATING_SYSTEM | 定义表L203 | cyberdeck_ripple_4=定义表L227/lang"Tetratronic Rippler Mk.4"（任务指派目标）；tetratronic_rippler_mkv=定义表L608/待插入L282/ID对照L42；描述L126 四相传电涟漪1~5型 同一产品线；lang en_us tetratronic_1/2/3="Tetratronic Cyberdeck Mk.1/2/3" | 素材: /sdcard/DSH/网络接入舱/四相传电.png [一图多用]
+cyberdeck_tetratronic_2  # OPERATING_SYSTEM | 定义表L211 | cyberdeck_ripple_4=定义表L227/lang"Tetratronic Rippler Mk.4"（任务指派目标）；tetratronic_rippler_mkv=定义表L608/待插入L282/ID对照L42；描述L126 四相传电涟漪1~5型 同一产品线；lang en_us tetratronic_1/2/3="Tetratronic Cyberdeck Mk.1/2/3" | 素材: /sdcard/DSH/网络接入舱/四相传电.png [一图多用]
+cyberdeck_tetratronic_3  # OPERATING_SYSTEM | 定义表L219 | cyberdeck_ripple_4=定义表L227/lang"Tetratronic Rippler Mk.4"（任务指派目标）；tetratronic_rippler_mkv=定义表L608/待插入L282/ID对照L42；描述L126 四相传电涟漪1~5型 同一产品线；lang en_us tetratronic_1/2/3="Tetratronic Cyberdeck Mk.1/2/3" | 素材: /sdcard/DSH/网络接入舱/四相传电.png [一图多用]
+cyberdeck_tinkerer_3  # OPERATING_SYSTEM | 定义表L108 | cyberdeck_dongyue_1=定义表L100/lang"Dongyue Cyberdeck Mk.1"；cyberdeck_tinkerer_3=定义表L108/lang"Tinkerer Cyberdeck Mk.3"；描述L120「冬月电子修补匠被移除后唯二的不朽网络接入仓」——「冬月电子修补匠」= Dongyue + Tinkerer 同一产品线的合成叫法 | 素材: /sdcard/DSH/网络接入舱/冬月修补匠.png [一图多用]
+dense_marrow  # SKELETON | 定义表L1049 | 定义表L1049 ID对照L105 名称逐字相同；webp 经 Pillow 转 32x32 png | 素材: /sdcard/DSH/义体/致密骨骼.webp
+detector_rush  # NERVOUS_SYSTEM | 定义表L1014 | 定义表L1014 ID对照L100 名称逐字相同 | 素材: /sdcard/DSH/义体/肾上腺素整流.png
+discharge_connector  # CIRCULATORY | 定义表L832 | 定义表L832 ID对照L74 名称逐字相同 | 素材: /sdcard/DSH/义体/反馈电路.png
+electroshock_mechanism  # INTEGUMENTARY | 定义表L937 | 定义表L937 ID对照L89 名称逐字相同 | 素材: /sdcard/DSH/义体/震慑通电.png
+endoskeleton  # SKELETON | 定义表L1056 | 定义表L1056 ID对照L106 名称逐字相同 | 素材: /sdcard/DSH/义体/再造骨骼.png
+ex_disk  # FRONTAL_CORTEX | 定义表L1133 | 定义表L1133 ID对照L117 指派：RAM外接盘→外接盘 | 素材: /sdcard/DSH/义体/RAM外接盘.png
+haunted_cyberdeck  # OPERATING_SYSTEM | 定义表L335 | 定义表L335 待插入L9 ID对照L3；描述L98 军用科技篇章6型；lang en_us 旧 id cyberdeck_militech_canto_6="Militech Canto Mk.6"（Canto=篇章） | 素材: /sdcard/DSH/网络接入舱/军用科技“篇章”.png
+heal_on_kill  # CIRCULATORY | 定义表L797 | 定义表L797 ID对照L69 名称逐字相同 | 素材: /sdcard/DSH/义体/击杀治疗.png
+iconic_advanced_kiroshi_optics_bare  # FACE | 定义表L370 | 定义表L370 ID对照L8 名称逐字相同 | 素材: /sdcard/DSH/义体/歧路司义眼“石化鸡蛇”.png
+iconic_bio_conductors  # FRONTAL_CORTEX | 定义表L468 | 定义表L468 ID对照L22 名称逐字相同 | 素材: /sdcard/DSH/义体/COX-2_赛博生体优化.png
+iconic_camillo_ram_manager  # FRONTAL_CORTEX | 定义表L475 | camillo_ram_manager=定义表L1126/ID对照L116 逐字相同；iconic_camillo_ram_manager=定义表L475/ID对照L23 主人已确认异写 卡米略RAM管理器=RAM配平；一图多用 | 素材: /sdcard/DSH/义体/卡米略RAM管理器.png [一图多用]
+iconic_chiton  # INTEGUMENTARY | 定义表L412 | 定义表L412 ID对照L14 主人已确认异写 几丁质壳=几质丁壳 | 素材: /sdcard/DSH/义体/几丁质壳.png
+iconic_gun_stabilizer  # ARMS | 定义表L384 | 定义表L384 ID对照L10 名称逐字相同 | 素材: /sdcard/DSH/义体/坚矛利盾.png
+iconic_jenkins_tendons  # LEGS | 定义表L405 | 定义表L405 ID对照L13 主人已确认异写 灭团韧带=团灭韧带 | 素材: /sdcard/DSH/义体/灭团韧带.png
+iconic_proximity_reducer  # INTEGUMENTARY | 定义表L419 | 定义表L419 ID对照L15 名称逐字相同 | 素材: /sdcard/DSH/义体/外周逆反.png
+iconic_reflex_recorder  # NERVOUS_SYSTEM | 定义表L440 | 定义表L440 ID对照L18 名称逐字相同 | 素材: /sdcard/DSH/义体/乖离排异.png
+iconic_shock_absorber  # CIRCULATORY | 定义表L398 | 定义表L398 ID对照L12 逐字相同；shock_absorber 的正确中文名是「持握衬垫」(定义表L825/ID对照L73)，与 iconic_shock_absorber「等距稳定」是两条独立定义，本图只对应等距稳定 | 素材: /sdcard/DSH/义体/等距稳定.png
+iconic_t1000  # SKELETON | 定义表L447 | iconic_t1000=定义表L447/ID对照L19 逐字相同；t1000=定义表L1105/ID对照L113 主人已确认异写 一拳开=百拳开；一图多用 | 素材: /sdcard/DSH/义体/一拳开.png [一图多用]
+jenkins_tendons  # LEGS | 定义表L867 | 定义表L867 ID对照L79 主人已确认异写 火车王肌腱=火车王肌建 | 素材: /sdcard/DSH/义体/火车王肌腱.png
+joint_lock  # ARMS | 定义表L755 | 定义表L755 ID对照L63 名称逐字相同 | 素材: /sdcard/DSH/义体/省力减震.png
+kerenzikov  # NERVOUS_SYSTEM | 定义表L979 | 定义表L979 ID对照L95 名称逐字相同 | 素材: /sdcard/DSH/义体/克伦齐科夫.png
+kerenziov_boost_system  # FRONTAL_CORTEX | 定义表L1140 | 定义表L1140 ID对照L118 名称逐字相同 | 素材: /sdcard/DSH/义体/克伦齐科夫增幅.png
+kiroshi_optics  # FACE | 定义表L685 | kiroshi_optics_bare=定义表L678/ID对照L52 逐字相同；kiroshi_optics=定义表L685/ID对照L53 主人已确认异写 基础歧路司义眼=歧路司义眼1型；一图多用 | 素材: /sdcard/DSH/义体/基础歧路司义眼.png [一图多用]
+kiroshi_optics_bare  # FACE | 定义表L678 | kiroshi_optics_bare=定义表L678/ID对照L52 逐字相同；kiroshi_optics=定义表L685/ID对照L53 主人已确认异写 基础歧路司义眼=歧路司义眼1型；一图多用 | 素材: /sdcard/DSH/义体/基础歧路司义眼.png [一图多用]
+kiroshi_optics_combined  # FACE | 定义表L692 | 定义表L692 ID对照L54 定义名作「神舆」；描述L193 与 待插入L366 上游文档同一物品写作「神谕」，为同音异写；候选 kiroshi_optics_piercing(追猎)/_sensor(警戒) 语义不符已排除 | 素材: /sdcard/DSH/义体/歧路司义眼“神谕”.png
+kiroshi_optics_hunter  # FACE | 定义表L699 | 定义表L699 ID对照L55 名称逐字相同 | 素材: /sdcard/DSH/义体/歧路司义眼“祸兆”.png
+kiroshi_optics_wallhack  # FACE | 定义表L720 | 定义表L720 ID对照L58 名称逐字相同 | 素材: /sdcard/DSH/义体/歧路司义眼“千里目”.png
+knife_sharpener  # ARMS | 定义表L741 | 定义表L741 ID对照L61 逐字相同；排除 shock_absorber(持握衬垫,定义表L825/ID对照L73)：描述L237 握柄固定套=投掷武器暴击，描述L296 持握衬垫=射击耐力消耗，描述表列为两件不同物品 | 素材: /sdcard/DSH/义体/握柄固定套.png
+mantis_blades  # ARMS | 定义表L503 | mantis_blades=定义表L503/ID对照L27 逐字相同；暴恐机动队螳螂刀=定义表L482/ID对照L24、三元素变体=定义表L489/ID对照L25、定义表L496/ID对照L26、定义表L510/ID对照L28；一图多用 | 素材: /sdcard/DSH/义体/螳螂刀.png [一图多用]
+mantis_blades_chemical  # ARMS | 定义表L489 | mantis_blades=定义表L503/ID对照L27 逐字相同；暴恐机动队螳螂刀=定义表L482/ID对照L24、三元素变体=定义表L489/ID对照L25、定义表L496/ID对照L26、定义表L510/ID对照L28；一图多用 | 素材: /sdcard/DSH/义体/螳螂刀.png [一图多用]
+mantis_blades_electric  # ARMS | 定义表L496 | mantis_blades=定义表L503/ID对照L27 逐字相同；暴恐机动队螳螂刀=定义表L482/ID对照L24、三元素变体=定义表L489/ID对照L25、定义表L496/ID对照L26、定义表L510/ID对照L28；一图多用 | 素材: /sdcard/DSH/义体/螳螂刀.png [一图多用]
+mantis_blades_thermal  # ARMS | 定义表L510 | mantis_blades=定义表L503/ID对照L27 逐字相同；暴恐机动队螳螂刀=定义表L482/ID对照L24、三元素变体=定义表L489/ID对照L25、定义表L496/ID对照L26、定义表L510/ID对照L28；一图多用 | 素材: /sdcard/DSH/义体/螳螂刀.png [一图多用]
+max_tac_mantis_blades  # ARMS | 定义表L482 | mantis_blades=定义表L503/ID对照L27 逐字相同；暴恐机动队螳螂刀=定义表L482/ID对照L24、三元素变体=定义表L489/ID对照L25、定义表L496/ID对照L26、定义表L510/ID对照L28；一图多用 | 素材: /sdcard/DSH/义体/螳螂刀.png [一图多用]
+memory_boost  # FRONTAL_CORTEX | 定义表L1154 | 定义表L1154 ID对照L120 主人已确认异写 RAM加强=内存加强 | 素材: /sdcard/DSH/义体/RAM加强.png
+micro_generator  # ARMS | 定义表L748 | 定义表L748 ID对照L62 名称逐字相同 | 素材: /sdcard/DSH/义体/微发电机.png
+militech_paraline_mkv  # OPERATING_SYSTEM | 定义表L601 | 定义表L601 待插入L275 ID对照L41；描述L107 军用科技平行线1~5型；lang en_us 旧 id cyberdeck_militech_parallel="Militech Paraline" | 素材: /sdcard/DSH/网络接入舱/军用科技平行线.png
+nano_tech_plates  # INTEGUMENTARY | 定义表L951 | 定义表L951 ID对照L91 名称逐字相同 | 素材: /sdcard/DSH/义体/纳米镀层.png
+nano_wires  # ARMS | 定义表L531 | nano_wires=定义表L531/ID对照L31 逐字相同；三元素变体=定义表L517/ID对照L29、定义表L524/ID对照L30、定义表L538/ID对照L32；一图多用 | 素材: /sdcard/DSH/义体/单分子线.png [一图多用]
+nano_wires_chemical  # ARMS | 定义表L517 | nano_wires=定义表L531/ID对照L31 逐字相同；三元素变体=定义表L517/ID对照L29、定义表L524/ID对照L30、定义表L538/ID对照L32；一图多用 | 素材: /sdcard/DSH/义体/单分子线.png [一图多用]
+nano_wires_electric  # ARMS | 定义表L524 | nano_wires=定义表L531/ID对照L31 逐字相同；三元素变体=定义表L517/ID对照L29、定义表L524/ID对照L30、定义表L538/ID对照L32；一图多用 | 素材: /sdcard/DSH/义体/单分子线.png [一图多用]
+nano_wires_thermal  # ARMS | 定义表L538 | nano_wires=定义表L531/ID对照L31 逐字相同；三元素变体=定义表L517/ID对照L29、定义表L524/ID对照L30、定义表L538/ID对照L32；一图多用 | 素材: /sdcard/DSH/义体/单分子线.png [一图多用]
+neo_fiber  # NERVOUS_SYSTEM | 定义表L1000 | 定义表L1000 ID对照L98 名称逐字相同 | 素材: /sdcard/DSH/义体/纳米纤维.png
+netwatch_netdriver_mk  # OPERATING_SYSTEM | 定义表L342 | cyberdeck_netwatch_5=定义表L265/lang"Netwatch Netdriver Mk.5"（任务指派目标）；netwatch_netdriver_mk=定义表L342/待插入L16/ID对照L4；描述L114 网络监察网驱1型 同一产品线 | 素材: /sdcard/DSH/网络接入舱/网络监察网驱.png [一图多用]
+neuro_matrix  # SKELETON | 定义表L1035 | 定义表L1035 ID对照L103 主人已确认异写 不死鸟=死不鸟 | 素材: /sdcard/DSH/义体/不死鸟.png
+no_pain_no_gain  # SKELETON | 定义表L1070 | 定义表L1070 ID对照L108 名称逐字相同 | 素材: /sdcard/DSH/义体/清创凝合.png
+oil_dispenser  # NERVOUS_SYSTEM | 定义表L972 | 定义表L972 ID对照L94 名称逐字相同 | 素材: /sdcard/DSH/义体/锥刺子.png
+optical_camo  # INTEGUMENTARY | 定义表L944 | 定义表L944 ID对照L90 名称逐字相同 | 素材: /sdcard/DSH/义体/光学迷彩.png
+pain_reductor  # INTEGUMENTARY | 定义表L909 | 定义表L909 ID对照L85 名称逐字相同 | 素材: /sdcard/DSH/义体/疼痛编辑器.png
+plating_glitch  # INTEGUMENTARY | 定义表L965 | 定义表L965 ID对照L93 名称逐字相同 | 素材: /sdcard/DSH/义体/克伦齐科夫回护.png
+power_grip  # ARMS | 定义表L734 | 定义表L734 ID对照L60 名称逐字相同 | 素材: /sdcard/DSH/义体/弹道协同处理器.png
+projectile_launcher  # ARMS | 定义表L559 | projectile_launcher=定义表L559/ID对照L35 主人已确认异写 射弹=弹射；三元素变体=定义表L545/ID对照L33、定义表L552/ID对照L34、定义表L566/ID对照L36；一图多用 | 素材: /sdcard/DSH/义体/射弹发射系统.png [一图多用]
+projectile_launcher_chemical  # ARMS | 定义表L545 | projectile_launcher=定义表L559/ID对照L35 主人已确认异写 射弹=弹射；三元素变体=定义表L545/ID对照L33、定义表L552/ID对照L34、定义表L566/ID对照L36；一图多用 | 素材: /sdcard/DSH/义体/射弹发射系统.png [一图多用]
+projectile_launcher_electric  # ARMS | 定义表L552 | projectile_launcher=定义表L559/ID对照L35 主人已确认异写 射弹=弹射；三元素变体=定义表L545/ID对照L33、定义表L552/ID对照L34、定义表L566/ID对照L36；一图多用 | 素材: /sdcard/DSH/义体/射弹发射系统.png [一图多用]
+projectile_launcher_thermal  # ARMS | 定义表L566 | projectile_launcher=定义表L559/ID对照L35 主人已确认异写 射弹=弹射；三元素变体=定义表L545/ID对照L33、定义表L552/ID对照L34、定义表L566/ID对照L36；一图多用 | 素材: /sdcard/DSH/义体/射弹发射系统.png [一图多用]
+proximity_reducer  # INTEGUMENTARY | 定义表L902 | 定义表L902 ID对照L84 名称逐字相同 | 素材: /sdcard/DSH/义体/近接防盾.png
+ram_upgrade  # FRONTAL_CORTEX | 定义表L1161 | 定义表L1161 ID对照L121 名称逐字相同 | 素材: /sdcard/DSH/义体/RAM升级.png
+rapid_muscle_nurish  # SKELETON | 定义表L1098 | 定义表L1098 ID对照L112 名称逐字相同 | 素材: /sdcard/DSH/义体/圣甲虫.png
+raven_microcyber_mkiii  # OPERATING_SYSTEM | 定义表L622 | cyberdeck_raven_4=定义表L273/lang"Raven Microcyber Mk.4"（任务指派目标）；raven_microcyber_mkiii=定义表L622/待插入L296/ID对照L44；描述L121 乌鸦微控1~3型 同一产品线 | 素材: /sdcard/DSH/网络接入舱/乌鸦微控.png [一图多用]
+reinforced_muscles  # LEGS | 定义表L874 | 定义表L874 ID对照L80 主人已确认字序异写 加固脚踝=踝部加固 | 素材: /sdcard/DSH/义体/加固脚踝.png
+sandevistan_apogee  # OPERATING_SYSTEM | 定义表L349 | 定义表L349 待插入L23 ID对照L5；描述L42 军用科技“远地点”斯安威斯坦；完整名称.txt L5 | 素材: /sdcard/DSH/斯安威斯坦/400px-军用科技斯安威斯坦“顶点”.png
+sandevistan_c1  # OPERATING_SYSTEM | 定义表L636 | 定义表L636 待插入L310 ID对照L46；描述L63 泽塔科技斯安威斯坦；完整名称.txt L1 | 素材: /sdcard/DSH/斯安威斯坦/泽塔科技斯安威斯坦.png
+sandevistan_c2  # OPERATING_SYSTEM | 定义表L643 | 定义表L643 待插入L317 ID对照L47；描述L58 迪纳拉斯安威斯坦；完整名称.txt L2 | 素材: /sdcard/DSH/斯安威斯坦/迪纳拉斯安威斯坦.png
+sandevistan_c3  # OPERATING_SYSTEM | 定义表L650 | 定义表L650 待插入L324 ID对照L48；描述L54 千替“实境扭曲”斯安威斯坦（扭曲/实境 字序异写，同一型号）；完整名称.txt L3 | 素材: /sdcard/DSH/斯安威斯坦/千替“扭曲实境”斯安威斯坦.png
+sandevistan_c4  # OPERATING_SYSTEM | 定义表L356 | 定义表L356 待插入L30 ID对照L6；描述L46 军用科技“游隼”斯安威斯坦；完整名称.txt L4（后缀 x=神话级） | 素材: /sdcard/DSH/斯安威斯坦/军用科技“游隼”.png
+second_heart  # CIRCULATORY | 定义表L790 | 定义表L790 ID对照L68 名称逐字相同 | 素材: /sdcard/DSH/义体/副心脏.png
+self_ice  # FRONTAL_CORTEX | 定义表L1168 | 定义表L1168 ID对照L122 名称逐字相同 | 素材: /sdcard/DSH/义体/自我ICE.png
+smart_link  # ARMS | 定义表L727 | 定义表L727 ID对照L59 主人已确认异写 智能链接=智能连接 | 素材: /sdcard/DSH/义体/智能链接.png
+stamina_regen_booster  # CIRCULATORY | 定义表L839 | 定义表L839 ID对照L75 名称逐字相同 | 素材: /sdcard/DSH/义体/肾上腺素增强件.png
+strong_arms  # ARMS | 定义表L587 | strong_arms=定义表L587/ID对照L39 逐字相同；三元素变体=定义表L573/ID对照L37、定义表L580/ID对照L38、定义表L594/ID对照L40；一图多用 | 素材: /sdcard/DSH/义体/大猩猩手臂.png [一图多用]
+strong_arms_chemical  # ARMS | 定义表L573 | strong_arms=定义表L587/ID对照L39 逐字相同；三元素变体=定义表L573/ID对照L37、定义表L580/ID对照L38、定义表L594/ID对照L40；一图多用 | 素材: /sdcard/DSH/义体/大猩猩手臂.png [一图多用]
+strong_arms_electric  # ARMS | 定义表L580 | strong_arms=定义表L587/ID对照L39 逐字相同；三元素变体=定义表L573/ID对照L37、定义表L580/ID对照L38、定义表L594/ID对照L40；一图多用 | 素材: /sdcard/DSH/义体/大猩猩手臂.png [一图多用]
+strong_arms_thermal  # ARMS | 定义表L594 | strong_arms=定义表L587/ID对照L39 逐字相同；三元素变体=定义表L573/ID对照L37、定义表L580/ID对照L38、定义表L594/ID对照L40；一图多用 | 素材: /sdcard/DSH/义体/大猩猩手臂.png [一图多用]
+sudden_aid  # INTEGUMENTARY | 定义表L930 | 定义表L930 ID对照L88 名称逐字相同 | 素材: /sdcard/DSH/义体/反制壳层.png
+synaptic_accelerator  # NERVOUS_SYSTEM | 定义表L993 | 定义表L993 ID对照L97 名称逐字相同 | 素材: /sdcard/DSH/义体/突触加速器.png
+t1000  # SKELETON | 定义表L1105 | iconic_t1000=定义表L447/ID对照L19 逐字相同；t1000=定义表L1105/ID对照L113 主人已确认异写 一拳开=百拳开；一图多用 | 素材: /sdcard/DSH/义体/一拳开.png [一图多用]
+tetratronic_rippler_mkv  # OPERATING_SYSTEM | 定义表L608 | cyberdeck_ripple_4=定义表L227/lang"Tetratronic Rippler Mk.4"（任务指派目标）；tetratronic_rippler_mkv=定义表L608/待插入L282/ID对照L42；描述L126 四相传电涟漪1~5型 同一产品线；lang en_us tetratronic_1/2/3="Tetratronic Cyberdeck Mk.1/2/3" | 素材: /sdcard/DSH/网络接入舱/四相传电.png [一图多用]
+titanium_infused_bones  # SKELETON | 定义表L1112 | 定义表L1112 ID对照L114 名称逐字相同 | 素材: /sdcard/DSH/义体/钛金骨骼.png
+trouble_finder  # NERVOUS_SYSTEM | 定义表L1021 | 定义表L1021 ID对照L101 逐字相同；排除 reflex_recorder(反应协调器,定义表L986/ID对照L96)：描述L262 瞬时感知有独立描述条目，反应协调器在描述表无条目且非同一物品名 | 素材: /sdcard/DSH/义体/瞬时感知.png
+tyrosine_injector  # NERVOUS_SYSTEM | 定义表L1028 | 定义表L1028 ID对照L102 名称逐字相同 | 素材: /sdcard/DSH/义体/酪氨酸注射器.png
+viral_venom  # CIRCULATORY | 定义表L804 | 定义表L804 ID对照L70 名称逐字相同 | 素材: /sdcard/DSH/义体/黑曼巴.png
+visual_cortex_support  # NERVOUS_SYSTEM | 定义表L1007 | 定义表L1007 ID对照L99 定义名「视觉皮质支持」，皮层/皮质同义；排除 iconic_visual_cortex_support(长焦可视界面,定义表L426/ID对照L16)：描述L265 视觉皮质支持 vs 描述L266 长焦可视界面 为两条独立条目，本图名与前者对应 | 素材: /sdcard/DSH/义体/视觉皮层支持.png
+weird_tanky_plating  # INTEGUMENTARY | 定义表L958 | 定义表L958 ID对照L92 名称逐字相同 | 素材: /sdcard/DSH/义体/全域覆盖.png

@@ -24,7 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(Projectile.class)
 public abstract class ProjectileMixin {
 
-    @Inject(method = "tick", at = @At("RETURN"))
+    @Inject(method = "tick", at = @At("RETURN"), require = 0)
     private void cyberware$slowProjectileOnClient(CallbackInfo ci) {
         Entity self = (Entity) (Object) this;
         if (!self.level().isClientSide()) {

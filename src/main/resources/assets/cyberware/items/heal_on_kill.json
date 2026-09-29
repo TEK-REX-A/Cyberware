@@ -1,0 +1,6 @@
+{
+  "model": {
+    "type": "minecraft:model",
+    "model": "cyberware:item/heal_on_kill"
+  }
+}

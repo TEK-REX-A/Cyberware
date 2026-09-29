@@ -32,7 +32,8 @@ public final class CyberwareCommands {
                     if (player == null) {
                         return 0;
                     }
-                    CyberwareDefinition def = CyberwareDefinitions.SANDEVISTAN_ZETATECH;
+                    // 0.3.12：旧占位定义 SANDEVISTAN_ZETATECH 已删除，用后继型号 C4（captain 授权的范围外修正）
+                    CyberwareDefinition def = CyberwareDefinitions.SANDEVISTAN_C4;
                     CyberwareDefinition.Variant v = def.baseVariant();
                     if (v == null) {
                         return 0;

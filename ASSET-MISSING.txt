@@ -1,0 +1,67 @@
+# ASSET-MISSING.txt —— 确实找不到素材的定义（t2 archivist 产出）
+# 三处素材目录（义体/ 斯安威斯坦/ 网络接入舱/）中不存在对应图形文件；已把最接近的候选逐条排除，排除理由见下。
+# 计数：19 条（= 当前定义表 142 条 − 白名单 123 条）。这些定义没有贴图，物品会渲染成缺失贴图，请 numbersmith 决定去留。
+# 行号基准：定义表行号取自 t1 baseline b0aabeeabbc1f2dcb46e649a72c9736678b1bb9d；numbersmith 删除 12 条旧定义后行号已偏移，请按 id 对齐。
+
+1. mask_cw_plus_plus  「行为特征脸板」  槽位=FACE  出处: ID对照L9；描述L194作「行为特征同步脸板」 / 定义表L377
+   - 已排除候选 全幅抵抗.png: 语义无关（脸板≠抗性），且描述表两条目不同
+
+2. iconic_discharge_connector  「电磁回收」  槽位=CIRCULATORY  出处: ID对照L11；描述L301 / 定义表L391
+   - 已排除候选 反向电感.png: 「电磁回收」(Electromagnetic Recovery) 与「反向电感」(Reverse Inductor) 名称不同，定义/ID对照/描述三处均无等价证据
+   - 已排除候选 反馈电路.png: 已有对应定义 discharge_connector(反馈电路,定义表L832)，同文件不能重复占用两条定义
+
+3. iconic_detector_rush  「肾上腺导引」  槽位=NERVOUS_SYSTEM  出处: ID对照L17；描述L260 / 定义表L433
+   - 已排除候选 肾上腺素整流.png: 已有对应定义 detector_rush(肾上腺素整流,定义表L1014)，两者是定义表 L1014 与 L433 两条独立定义
+   - 已排除候选 肾上腺素增强件.png: 已有对应定义 stamina_regen_booster(定义表L839)
+
+4. time_bank  「量子调谐」  槽位=FRONTAL_CORTEX  出处: ID对照L20；描述L24 / 定义表L454
+   - 已排除候选 RAM升级.png: RAM升级是另一条定义(定义表L1161)
+   - 已排除候选 蓄电缓冲相关素材: 素材集中无「蓄电缓冲」文件
+
+5. iconic_subdermal_co_processor  「皮下变色」  槽位=FRONTAL_CORTEX  出处: ID对照L21；描述L5 / 定义表L461
+   - 已排除候选 真皮上编束.png: 「皮下变色」(变色) 与「真皮上编束」(编织束) 名称不同，无等价证据
+
+6. kiroshi_optics_piercing  「歧路司义眼追猎」  槽位=FACE  出处: ID对照L56；描述L188 / 定义表L706
+   - 已排除候选 歧路司义眼“神谕”.png: 已归 kiroshi_optics_combined（描述L193 神谕=定义名神舆），不能重复占用
+
+7. kiroshi_optics_sensor  「歧路司义眼警戒」  槽位=FACE  出处: ID对照L57；描述L187 / 定义表L713
+   - 已排除候选 歧路司义眼“神谕”.png: 同上，已归 kiroshi_optics_combined
+
+8. yakuza_tattoo  「纹身虎爪帮」  槽位=ARMS  出处: ID对照L64；描述L251 / 定义表L762
+   - 已排除候选 无: 素材集内无任何「纹身」图形文件
+
+9. silverhand_tattoo  「纹身永远在一起」  槽位=ARMS  出处: ID对照L65；描述L254 / 定义表L769
+   - 已排除候选 无: 素材集内无任何「纹身」图形文件
+
+10. casius_tattoo  「纹身强尼特制」  槽位=ARMS  出处: ID对照L66；描述L254 / 定义表L776
+   - 已排除候选 无: 素材集内无任何「纹身」图形文件
+
+11. shock_absorber  「持握衬垫」  槽位=CIRCULATORY  出处: ID对照L73；描述L296 / 定义表L825
+   - 已排除候选 握柄固定套.png: 已归 knife_sharpener(握柄固定套, 定义表L741)：描述L237 与描述L296 是两件不同物品（投掷武器暴击 vs 射击耐力消耗）
+   - 已排除候选 等距稳定.png: 已归 iconic_shock_absorber(等距稳定, 定义表L398/ID对照L12)，两条定义互不相同
+
+12. iconic_visual_cortex_support  「长焦可视界面」  槽位=NERVOUS_SYSTEM  出处: ID对照L16；描述L266 / 定义表L426
+   - 已排除候选 视觉皮层支持.png: 已归 visual_cortex_support(视觉皮质支持, 定义表L1007/ID对照L99)：描述L265 vs L266 为两条独立条目，素材名与前者字面一致
+
+13. reflex_recorder  「反应协调器」  槽位=NERVOUS_SYSTEM  出处: ID对照L96；描述表无该条目 / 定义表L986
+   - 已排除候选 瞬时感知.png: 已归 trouble_finder(瞬时感知, 定义表L1021/ID对照L101)，字面一致且描述L262 有独立条目
+
+14. pain_distributor  「通用增强件」  槽位=SKELETON  出处: ID对照L109；描述L231 / 定义表L1077
+   - 已排除候选 全幅抵抗.png: 「通用增强件」(通用) 与「全幅抵抗」(抵抗) 名称不同，无等价证据
+
+15. bionic_joints  「仿生关节」  槽位=SKELETON  出处: ID对照L111；描述L202 / 定义表L1091
+   - 已排除候选 弹性关节.png: 已归 agile_joints(弹性关节, 定义表L1042/ID对照L104)
+   - 已排除候选 反向电感.png: 语义无关
+
+16. mechatronic_core  「机电核心」  槽位=FRONTAL_CORTEX  出处: ID对照L119；描述L22 / 定义表L1147
+   - 已排除候选 机电核心相关素材: 素材集中无该文件
+
+17. smart_storage  「蓄电缓冲」  槽位=FRONTAL_CORTEX  出处: ID对照L123 / 定义表L1175
+   - 已排除候选 蓄电缓冲相关素材: 素材集中无该文件
+
+18. subdermal_co_processor  「牛顿模块」  槽位=FRONTAL_CORTEX  出处: ID对照L124；描述L7 / 定义表L1182
+   - 已排除候选 真皮上编束.png: 「牛顿模块」与「真皮上编束」名称/语义均不同
+
+19. bio_conductors  「生物导体」  槽位=FRONTAL_CORTEX  出处: ID对照L115；描述L11 / 定义表L1119
+   - 已排除候选 生物塑料血管.png: 「生物导体」(Bioconductor) 与「生物塑料血管」(Bioplastic vessels) 名称不同，无等价证据
+

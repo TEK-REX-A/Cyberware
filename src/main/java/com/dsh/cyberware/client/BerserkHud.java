@@ -33,8 +33,15 @@ public final class BerserkHud {
     private static final int FILL_HIGH = 0xBEE6D4D0;
     private static final int DIM = 0xD8D4C4C1;
 
+    /**
+     * HUD 图标。
+     *
+     * <p>0.3.12：废弃型号 {@code berserk_militech} 已从定义表与资源里删除，
+     * 换用它的继承者「军用科技·狂暴」（{@code berserk_c4}）—— 路径必须跟着改，
+     * 否则 HUD 上会画成紫黑格。
+     */
     private static final Identifier ICON = Identifier.fromNamespaceAndPath(
-            Cyberware.MODID, "textures/item/berserk_militech.png");
+            Cyberware.MODID, "textures/item/berserk_c4.png");
     private static final int ICON_SIZE = 11;
 
     private BerserkHud() {

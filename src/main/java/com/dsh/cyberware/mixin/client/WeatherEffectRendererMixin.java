@@ -16,13 +16,13 @@ import org.spongepowered.asm.mixin.injection.ModifyVariable;
 public class WeatherEffectRendererMixin {
 
     /** 参数顺序：(Level level, int ticks, float partialTick, Vec3 cameraPos, WeatherRenderState state) */
-    @ModifyVariable(method = "extractRenderState", at = @At("HEAD"), argsOnly = true, index = 2)
+    @ModifyVariable(method = "extractRenderState", at = @At("HEAD"), argsOnly = true, index = 2, require = 0)
     private int cyberware$slowWeatherTicks(int ticks) {
         // partialTick 还没轮到我们改，这里先用 0 近似取整；下一处会补齐小数
         return WeatherTickClock.virtualTickPart(ticks, 0.0F);
     }
 
-    @ModifyVariable(method = "extractRenderState", at = @At("HEAD"), argsOnly = true, index = 3)
+    @ModifyVariable(method = "extractRenderState", at = @At("HEAD"), argsOnly = true, index = 3, require = 0)
     private float cyberware$slowWeatherPartial(float partialTick) {
         return WeatherTickClock.virtualPartialPart(partialTick, partialTick);
     }

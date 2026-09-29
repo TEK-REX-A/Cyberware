@@ -1,6 +1,8 @@
 package com.dsh.cyberware.network;
 
 import com.dsh.cyberware.Cyberware;
+import com.dsh.cyberware.menu.CyberwareStationService;
+import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -8,8 +10,14 @@ import net.neoforged.neoforge.network.registration.PayloadRegistrar;
 /** 网络包注册。 */
 public final class CyberwareNetwork {
 
-    /** 协议版本号：改了 payload 结构就往上加，避免旧客户端连新服务端出错。 */
-    public static final String PROTOCOL_VERSION = "1";
+    /**
+     * 协议版本号：改了 payload 结构就往上加，避免旧客户端连新服务端出错。
+     *
+     * <p>0.3.12 起 {@code CyberwareActionPayload} 多了 {@code defId} 字段 → 升到 {@code "2"}。
+     * 注意 NeoForge 的版本号是**按 channel（payload）**协商的（见 {@code NetworkPayloadSetup}），
+     * 所以客户端 {@code CyberwareClient} 里那两个 S2C 包的 {@code "1"} 不受影响。
+     */
+    public static final String PROTOCOL_VERSION = "2";
 
     private CyberwareNetwork() {
     }
@@ -36,14 +44,31 @@ public final class CyberwareNetwork {
     }
 
     /**
-     * 服务端处理。注意 26.x 的 {@code playToServer} 只有带 handler 的重载，
+     * 服务端处理操作台的安装 / 卸载 / 升级请求。
+     *
+     * <p>注意 26.x 的 {@code playToServer} 只有带 handler 的重载，
      * 且 handler 必须在主线程执行 —— 所以一律走 {@code enqueueWork}。
+     *
+     * <p>这里只负责派发：规则与数据变更都在 {@link CyberwareStationService} 里，
+     * 和原版按钮路径（{@code CyberwareStationMenu#clickMenuButton}）共用同一份实现。
+     * 非 {@link ServerPlayer} 一律直接返回 —— 客户端永远没有改数据的权限。
      */
     private static void handleAction(CyberwareActionPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
-            // TODO(第二步): 按 payload.action() 分支处理安装/卸载/升级
-            Cyberware.LOGGER.debug("[cyberware] station action: {} slot={} player={}",
-                    payload.action(), payload.slotIndex(), context.player().getName().getString());
+            if (!(context.player() instanceof ServerPlayer serverPlayer)) {
+                return;
+            }
+            Cyberware.LOGGER.debug("[cyberware] station action: {} slot={} def={} player={}",
+                    payload.action(), payload.slotIndex(), payload.defId(),
+                    serverPlayer.getName().getString());
+            switch (payload.action()) {
+                case INSTALL -> CyberwareStationService.install(
+                        serverPlayer, payload.containerId(), payload.slotIndex());
+                case UNINSTALL -> CyberwareStationService.uninstall(
+                        serverPlayer, payload.containerId(), payload.defId(), payload.slotIndex());
+                case UPGRADE -> CyberwareStationService.upgrade(
+                        serverPlayer, payload.containerId(), payload.slotIndex());
+            }
         });
     }
 }
