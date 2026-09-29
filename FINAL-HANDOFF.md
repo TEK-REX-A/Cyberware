@@ -308,4 +308,7 @@ grep -n "Cyberware 义体系统" …/latest.log
 | # | commit | 内容 |
 |---|---|---|
 | 1 | `30e9646cadd76444082b8cde1e273174e63ba98d` | 0.3.12-Beta 全部源码/资源 + 10 份交付文档（425 files, +5515/−641） |
-| 2 | 本文件 FINAL-HANDOFF.md 的收尾提交（hash 见 t12 任务回报，文件内容已固定，不再自指） | 本手交文档 |
+| 2 | `b131559ef462bc895fc13ff80e9e423faaf938c8` | FINAL-HANDOFF.md（本文件首次入库，311 行） |
+| 3 | （本行所在提交） | 仅回填第 2 条的 hash，正文内容零改动 |
+
+两次实质提交都在**本地**仓库；未 `git push`。
