@@ -42,13 +42,16 @@ public enum HackLibrary {
         }
     },
 
-    /** 突触熔断：虚弱 + 缓慢 5 秒。上传 2.0s。 */
+    /** 突触熔断：−24 HP + 凋零 IV 6 秒（0.5.1 主人拍板**替换**原「缓慢+虚弱」）。上传 2.0s。 */
     SYNAPSE_BURNOUT("synapse_burnout", "突触熔断", 40, 3) {
         @Override
         public void apply(ServerPlayer caster, LivingEntity target) {
-            // 邮件IX §四.4：「虚弱+缓慢5秒」→ 100 刻；效果等级 1 待主人裁决（A5，见 HACK-VALUES §4）
-            target.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 100, 1));
-            target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 100, 1));
+            if (!(target.level() instanceof ServerLevel level)) {
+                return;
+            }
+            // 0.5.1 主人拍板：−24 HP（indirectMagic 归因给施法者）+ 凋零 120 刻 等级 3（= 凋零 IV）
+            target.hurtServer(level, level.damageSources().indirectMagic(caster, caster), 24.0F);
+            target.addEffect(new MobEffectInstance(MobEffects.WITHER, 120, 3));
             particles(target, ParticleTypes.CRIT, 10);
         }
     },

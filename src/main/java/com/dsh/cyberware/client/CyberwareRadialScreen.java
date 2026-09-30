@@ -6,6 +6,7 @@ import com.dsh.cyberware.core.CyberwareDefinitions;
 import com.dsh.cyberware.core.CyberwareInstallation;
 import com.dsh.cyberware.data.CyberwareData;
 import com.dsh.cyberware.network.ActivatePayload;
+import com.dsh.cyberware.network.OverclockPayload;
 import com.mojang.blaze3d.platform.InputConstants;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,20 +90,44 @@ public class CyberwareRadialScreen extends Screen {
      *
      * <p>{@code minecraft.screen != null} 时直接忽略：轮盘已经开着（或玩家正开别的界面），
      * 不叠第二个。
+     *
+     * <p><b>t36</b>：轮盘末尾追加一项「脑机超频」（契约 STEP4 §3；G 键已取消）。
+     * 空盘判定保持原样：<b>身上一件义体都没有</b>的玩家仍然只看到提示、不开空盘；
+     * 只要装了任意义体（例如网络接入仓），就能从轮盘里切超频。
      */
     public static void openOrHint(Minecraft minecraft) {
         if (minecraft == null || minecraft.screen != null) {
             return;
         }
         List<Entry> entries = collectActive(minecraft.player);
-        if (entries.isEmpty()) {
+        boolean hasAnyCyberware = minecraft.player != null
+                && com.dsh.cyberware.core.CyberwareInstallation.of(minecraft.player).count() > 0;
+        if (entries.isEmpty() && !hasAnyCyberware) {
             if (minecraft.gui != null) {
                 minecraft.gui.setOverlayMessage(
                         Component.literal("§7[义体] 没有可用的主动义体（先装上斯安威斯坦或狂暴）"), false);
             }
             return;
         }
+        entries = new java.util.ArrayList<>(entries);
+        entries.add(overclockEntry());           // t36：追加「脑机超频」（原义体项一个不少）
         minecraft.setScreen(new CyberwareRadialScreen(entries));
+    }
+
+    /** 「脑机超频」在轮盘里的伪 id（绝不可能与真实 defId 撞车）。 */
+    private static final String OVERCLOCK_ID = "\u0000cyberware:overclock";
+    /** 它的图标：复用已有的网络接入仓贴图（不新增素材）。 */
+    private static final Identifier OVERCLOCK_ICON = Identifier.fromNamespaceAndPath(
+            Cyberware.MODID, "textures/item/cyberdeck_arasaka_3.png");
+
+    /** 轮盘里的「脑机超频」项（t36）。 */
+    private static Entry overclockEntry() {
+        return new Entry(OVERCLOCK_ID, "脑机超频", OVERCLOCK_ICON);
+    }
+
+    /** 这一项是不是「脑机超频」。 */
+    private static boolean isOverclock(Entry entry) {
+        return entry != null && OVERCLOCK_ID.equals(entry.id());
     }
 
     /**
@@ -211,6 +236,14 @@ public class CyberwareRadialScreen extends Screen {
                     ICON_SIZE, ICON_SIZE, 32, 32);
             g.centeredText(this.font, Component.literal(entry.name()),
                     x, y + PLATE + 3, isSelected ? COL_TEXT_SEL : COL_TEXT);
+            // t36：「脑机超频」项右上角补一行状态（超频中显示剩余秒；冷却中显示 CD 并置灰）
+            if (isOverclock(entry)) {
+                String state = overclockStateLabel();
+                if (!state.isEmpty()) {
+                    g.centeredText(this.font, Component.literal(state), x, y + PLATE + 13,
+                            overclockCoolingDown() ? COL_HINT : COL_TEXT_SEL);
+                }
+            }
         }
 
         // 中心：当前选中项的名字（或「松开取消」）
@@ -218,15 +251,47 @@ public class CyberwareRadialScreen extends Screen {
         int cyi = (int) Math.round(cy);
         g.fill(cxi - 70, cyi - 16, cxi + 70, cyi + 16, COL_CENTER_BG);
         if (selected >= 0) {
-            g.centeredText(this.font, Component.literal(this.entries.get(selected).name()),
+            Entry sel = this.entries.get(selected);
+            g.centeredText(this.font, Component.literal(sel.name()),
                     cxi, cyi - 11, COL_TEXT_SEL);
-            g.centeredText(this.font, Component.literal("松开 " + keyName() + " 施放"),
-                    cxi, cyi + 1, COL_HINT);
+            String hint = isOverclock(sel)
+                    ? overclockHint()
+                    : "松开 " + keyName() + " 施放";
+            g.centeredText(this.font, Component.literal(hint), cxi, cyi + 1, COL_HINT);
         } else {
             g.centeredText(this.font, Component.literal("指到图标上选择"), cxi, cyi - 11, COL_HINT);
             g.centeredText(this.font, Component.literal("松开 " + keyName() + " 取消"),
                     cxi, cyi + 1, COL_HINT);
         }
+    }
+
+    /** 「脑机超频」项的状态标签（t36）：超频中 → 剩余秒；冷却中 → CD Ns；否则空串。 */
+    private static String overclockStateLabel() {
+        if (RamClientState.overclockActive()) {
+            return "进行中 " + RamClientState.remainingSeconds() + "s";
+        }
+        int cd = RamClientState.cooldownRemainingTicks();
+        if (cd > 0) {
+            return "CD " + ((cd + 19) / 20) + "s";
+        }
+        return "";
+    }
+
+    /** 冷却中：这一项置灰（纯展示，仍然可以选/发，由服务端裁决 —— 契约 STEP4 §1.2 的教训）。 */
+    private static boolean overclockCoolingDown() {
+        return !RamClientState.overclockActive() && RamClientState.cooldownRemainingTicks() > 0;
+    }
+
+    /** 中心的提示语（选中「脑机超频」时）。 */
+    private static String overclockHint() {
+        if (RamClientState.overclockActive()) {
+            return "松开终止超频 · 剩余 " + RamClientState.remainingSeconds() + "s";
+        }
+        int cd = RamClientState.cooldownRemainingTicks();
+        if (cd > 0) {
+            return "冷却中 CD " + ((cd + 19) / 20) + "s（仍可发，由服务端裁决）";
+        }
+        return "松开启动脑机超频";
     }
 
     /**
@@ -357,15 +422,21 @@ public class CyberwareRadialScreen extends Screen {
             return;
         }
         this.finished = true;
-        String defId = this.selected >= 0 ? this.entries.get(this.selected).id() : null;
+        Entry chosen = this.selected >= 0 ? this.entries.get(this.selected) : null;
 
         // 我们返回了 true，KeyboardHandler 就不会替我们清这个键的按下状态 —— 自己清掉，
         // 免得 RADIAL 卡在 isDown。静态 set 比 setDown 更直接（KeyMapping.set(Key, false)）。
         KeyMapping.set(CyberwareKeys.RADIAL.getKey(), false);
 
         this.minecraft.setScreen(null); // 恢复鼠标抓取 + 触发 removed()
-        if (defId != null) {
-            ClientPacketDistributor.sendToServer(ActivatePayload.of(defId));
+        if (chosen == null) {
+            return;
+        }
+        if (isOverclock(chosen)) {
+            // t36：轮盘里的「脑机超频」项 —— 只发「请求切换」，能否开由服务端裁决
+            ClientPacketDistributor.sendToServer(OverclockPayload.toggleRequest());
+        } else {
+            ClientPacketDistributor.sendToServer(ActivatePayload.of(chosen.id()));
         }
     }
 

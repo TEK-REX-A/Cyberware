@@ -135,16 +135,33 @@ public class HackRadialScreen extends Screen {
             HackClientState.HackEntry entry = this.entries.get(selected);
             boolean ok = HackClientState.affordable(entry);
             g.centeredText(this.font, Component.literal(entry.name()), cxi, cyi - 11, COL_TEXT_SEL);
+            // 提示语（t36）：分「RAM 够 / 超频中（以生命代偿）/ RAM 不足」三种，
+            // 但**三种都允许发** —— 能不能成事由服务端裁决（契约 STEP4 §1.2）。
+            String hint;
+            int hintColor = COL_HINT;
             if (ok) {
-                g.centeredText(this.font,
-                        Component.literal("松开 " + CyberwareKeys.RADIAL.getTranslatedKeyMessage().getString()
-                                + " 上传 · " + entry.ramCost() + " RAM"), cxi, cyi + 1, COL_HINT);
+                hint = "松开 " + hackKeyName() + " 上传 · " + entry.ramCost() + " RAM";
+            } else if (RamClientState.overclockActive()) {
+                hint = "超频中：以生命代偿 2 HP · " + entry.ramCost() + " RAM";
+                hintColor = COL_RAM_BAD;
             } else {
-                g.centeredText(this.font, Component.literal("RAM 不足 —— 置灰不可发"), cxi, cyi + 1, COL_RAM_BAD);
+                hint = "RAM 不足 " + (int) RamClientState.current() + "/" + entry.ramCost()
+                        + " —— 仍可发，由服务端裁决";
+                hintColor = COL_RAM_BAD;
             }
+            g.centeredText(this.font, Component.literal(hint), cxi, cyi + 1, hintColor);
         } else {
             g.centeredText(this.font, Component.literal("指到破解上选择"), cxi, cyi - 11, COL_HINT);
             g.centeredText(this.font, Component.literal("松开取消"), cxi, cyi + 1, COL_HINT);
+        }
+    }
+
+    /** 收尾键的名字（t36 起是 X，不再是 R）。 */
+    private static String hackKeyName() {
+        try {
+            return CyberwareKeys.SCAN.getTranslatedKeyMessage().getString();
+        } catch (Throwable t) {
+            return "X";
         }
     }
 
@@ -210,28 +227,31 @@ public class HackRadialScreen extends Screen {
         return true;
     }
 
-    /** 收起并（仅当选中且 RAM 够时）发一次 CAST；其余情况一个包都不发。 */
+    /**
+     * 收起并（<b>只要选中了就一定</b>）发一次 CAST。
+     *
+     * <p><b>t36 修掉的 BUG（契约 STEP4 §1.2）</b>：这里原来是
+     * <pre>if (HackClientState.affordable(entry)) hackId = entry.id();</pre>
+     * —— RAM 不够连包都不发，于是服务端「濒死超频 → 扣 2 点生命」那条分支
+     * <b>永远收不到请求</b>。现在改成<b>展示与裁决分离</b>：RAM 只影响图标与文案
+     * （置灰、提示），<b>不再拦发包</b>；能不能成事由服务端裁决（RAM 不足会回 REJECTED）。
+     */
     private void commit() {
         if (this.finished) {
             return;
         }
         this.finished = true;
-        String hackId = null;
-        if (selected >= 0) {
-            HackClientState.HackEntry entry = this.entries.get(selected);
-            if (HackClientState.affordable(entry)) {
-                hackId = entry.id();            // RAM 不足 → 置灰不可发
-            }
-        }
-        net.minecraft.client.KeyMapping.set(CyberwareKeys.RADIAL.getKey(), false);
+        String hackId = selected >= 0 ? this.entries.get(selected).id() : null;
+        net.minecraft.client.KeyMapping.set(CyberwareKeys.SCAN.getKey(), false);
         this.minecraft.setScreen(null);
         if (hackId != null && targetEntityId > 0) {
             ClientPacketDistributor.sendToServer(HackPayload.cast(targetEntityId, hackId));
         }
     }
 
+    /** 收尾键：t36 起破解轮盘由 X 长按呼出，所以松手判的是 X（不再是 R）。 */
     private static boolean isRadialKey(int key) {
-        int bound = CyberwareKeys.RADIAL.getKey().getValue();
+        int bound = CyberwareKeys.SCAN.getKey().getValue();
         return key >= 0 && key == bound;
     }
 }

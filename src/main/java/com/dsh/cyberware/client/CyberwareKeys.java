@@ -39,24 +39,15 @@ public final class CyberwareKeys {
             CATEGORY);
 
     /**
-     * 脑机超频开关（默认 G，t25）。
+     * 歧路司扫描 / 快速破解轮盘（默认 X，t29 新增，t36 改双行为）。
      *
-     * <p>客户端只发「请求切换」的 {@code OverclockPayload.TOGGLE}；能不能开
-     * （装了网络接入仓吗？在冷却吗？）全部由服务端裁决，客户端不做任何判定。
-     * 键位显示名需要 lang：{@code key.cyberware.overclock}。
-     */
-    public static final KeyMapping OVERCLOCK = new KeyMapping(
-            "key.cyberware.overclock",
-            InputConstants.Type.KEYSYM,
-            InputConstants.KEY_G,
-            CATEGORY);
-
-    /**
-     * 歧路司扫描（默认 X，t29，契约 §1.5）。
+     * <p><b>短按（按住 &lt; {@code 300ms} 松开）</b>= 歧路司扫描：发
+     * {@code HackPayload.scan()}（{@code action=SCAN / hackId="scan" / targetEntityId=-1}）；
+     * <b>长按（按住满 300ms）</b>= 立刻呼出快速破解轮盘（松手选择/取消）。
+     * 阈值与状态机在 {@code CyberwareClient} 里（契约 STEP4 §3）。
      *
-     * <p>客户端只发 {@code HackPayload.scan()}（{@code action=SCAN / hackId="scan" /
-     * targetEntityId=-1}）；装没装歧路司义眼、扫谁、持续多久全在服务端裁决
-     * （未装会回 {@code REJECTED / NO_KIROSHI}）。键位显示名需要 lang：{@code key.cyberware.scan}。
+     * <p><b>t36 起没有 G 键</b>：脑机超频改成 R 轮盘里的一项（契约 §3 的键位最终形态）。
+     * 键位显示名需要 lang：{@code key.cyberware.scan}。
      */
     public static final KeyMapping SCAN = new KeyMapping(
             "key.cyberware.scan",

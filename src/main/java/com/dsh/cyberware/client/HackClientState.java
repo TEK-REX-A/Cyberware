@@ -269,6 +269,15 @@ public final class HackClientState {
         }
     }
 
+    /** 让别的客户端逻辑也能弹一条提示（t36：X 长按但无锁定目标时用）。 */
+    public static void showNote(String note) {
+        if (note == null || note.isBlank()) {
+            return;
+        }
+        lastNote = note;
+        noteAtMs = System.currentTimeMillis();
+    }
+
     /** 收缩动画结束：HUD 调它把时间戳归零，之后不再画任何东西（不留残影）。 */
     public static void endCollapse() {
         collapseAtMs = 0L;

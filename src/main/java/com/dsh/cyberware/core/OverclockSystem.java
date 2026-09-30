@@ -78,6 +78,12 @@ public final class OverclockSystem {
     /**
      * 每刻调用（由 {@link RamSystem#onPlayerTick} 驱动）：到点自动结束并进入冷却。
      *
+     * <p><b>0.5.1 修掉的 BUG</b>：以前这里写的是
+     * {@code if (!state.isActive(now)) return false;}，而 {@code isActive(now)} 的含义是
+     * {@code active && now < expiresAt} —— 开启后的第一个 tick 它就已经是 true，
+     * 于是**刚开就自己结束**、紧接着被推进冷却（玩家看到「超频一闪」+「按了没反应」）。
+     * 现在只有**真到点**才结束：{@code remainingTicks(now) == 0}。
+     *
      * @return 状态是否发生了变化（用于决定要不要同步）
      */
     public static boolean tick(ServerPlayer player) {
@@ -86,7 +92,8 @@ public final class OverclockSystem {
         }
         long now = serverTicks(player);
         OverclockState state = read(player, now);
-        if (!state.isActive(now)) {
+        // 没开超频、或还没到点 → 什么都不做（这才是「持续满时长」的关键）
+        if (!state.active() || state.remainingTicks(now) > 0) {
             return false;
         }
         OverclockState.set(player, state.endAt(now, CyberwareStats.overclockCooldownTicks(player)));

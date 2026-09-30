@@ -5,6 +5,7 @@ import com.dsh.cyberware.core.CyberwareAbilities;
 import com.dsh.cyberware.core.HackSystem;
 import com.dsh.cyberware.core.OverclockSystem;
 import com.dsh.cyberware.event.CombatEffectsHandler;
+import com.dsh.cyberware.event.RamKillHandler;
 import com.dsh.cyberware.menu.CyberwareStationService;
 import net.minecraft.server.level.ServerPlayer;
 import net.neoforged.neoforge.common.NeoForge;
@@ -70,6 +71,8 @@ public final class CyberwareNetwork {
         NeoForge.EVENT_BUS.addListener(CombatEffectsHandler::onEntityJoinLevel);
         NeoForge.EVENT_BUS.addListener(CombatEffectsHandler::onServerStopped);
         NeoForge.EVENT_BUS.addListener(CombatEffectsHandler::onPlayerLoggedOut);
+        // 击杀回 RAM（0.5.1）：只有玩家击杀敌意/中立生物才给，见 RamKillHandler 的判定
+        NeoForge.EVENT_BUS.addListener(RamKillHandler::onLivingDeath);
     }
 
     /**

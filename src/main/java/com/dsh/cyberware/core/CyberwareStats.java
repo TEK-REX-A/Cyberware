@@ -37,15 +37,15 @@ public final class CyberwareStats {
     private static final int[] OVERCLOCK_COOLDOWN_SECONDS = {60, 55, 50, 45, 40, 35};
 
     /**
-     * 裸机（未装网络接入仓）的基础 RAM 恢复速率，单位：每分钟。
+     * 基础 RAM 恢复速率，单位：每分钟。
      *
-     * <p>邮件IX 只说「默认上限 8、由接入仓决定恢复速率」，没说裸机速率；
-     * 取 1.0 的理由：接入仓的 {@code RAM_REGEN} 是 3~9/分钟量级，1.0 只是「涓流」，
-     * 保证「花光 8 点后不会永久卡死在 0/8」，同时把「想快就得装接入仓」留给玩家。
+     * <p>邮件IX 只说「默认上限、由接入仓决定恢复速率」，没说裸机速率。
+     * <b>0.5.1 主人拍板：4.0/分钟</b>（原 1.0 主人反馈「回太慢」）—— 接入仓的 {@code RAM_REGEN}
+     * 是 3~9/分钟量级，4.0 让裸机不至于干等，装了接入仓仍然更快。
      *
-     * <p>{@code TODO(主人裁决): 数值可调，0 也合法（= 与 0.4.0 同语义）。}
+     * <p>{@code TODO(主人裁决): 数值可调，0 也合法（= 关闭裸机涓流）。}
      */
-    private static final double BASE_RAM_REGEN = 1.0D;
+    private static final double BASE_RAM_REGEN = 4.0D;
 
     private CyberwareStats() {
     }
@@ -78,19 +78,18 @@ public final class CyberwareStats {
     }
 
     /**
-     * RAM 上限 = {@code max(8, Σ Stats.RAM)}。
+     * RAM 上限 = {@code max(12, Σ Stats.RAM)}。
      *
-     * <p><b>那 8 点的来历</b>：邮件IX §二明文「玩家拥有 RAM 值（**默认上限 8**，由网络接入仓决定
-     * 最大上限和恢复速率）」→ 裸机也有 8 点基线。取 {@code max} 而不是「8 + Σ」的理由：
-     * ① 邮件口径就是「默认上限 8」；② 小接入仓（冬月电子1型 3 / 瑞草电子1型 4）不会把玩家削到比裸机更低；
-     * ③ 大接入仓（technica_4 = 12）+ RAM 配平/升级才是真正涨上限的路径；④ 破解成本 4~8 在裸机 8 点下
-     * 「一条一放」，装了接入仓才宽裕 —— 资源稀缺感保留。
+     * <p><b>那 12 点的来历</b>：邮件IX §二原文是「默认上限 8」，**0.5.1 主人拍板提到 12**
+     * （主人真机反馈「RAM 太少」）→ 裸机基线 12。取 {@code max} 而不是「12 + Σ」的理由：
+     * ① 基线就是「最小上限」的语义；② 小接入仓（冬月电子1型 3 / 瑞草电子1型 4）不会把玩家削到比裸机更低；
+     * ③ 接入仓高于 12（technica_4 = 12、tech_4 = 12、arasaka_5 = 10）或叠加 RAM 配平/升级时才继续涨上限。
      *
      * <p>数值表里这个键可以为负（例：{@code iconic_bio_conductors} RAM = -4），
      * 所以是**求和后夹到基线以上** —— 负数上限没有意义，会让「灌满」逻辑失去意义。
      */
     public static double maxRam(Player player) {
-        return Math.max(8.0D, sum(player, CyberwareDefinition.Stats.RAM));
+        return Math.max(12.0D, sum(player, CyberwareDefinition.Stats.RAM));
     }
 
     /**

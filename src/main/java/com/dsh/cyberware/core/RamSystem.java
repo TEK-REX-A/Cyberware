@@ -78,6 +78,28 @@ public final class RamSystem {
         return true;
     }
 
+    /**
+     * 加 RAM（击杀回 RAM 等来源；0.5.1 新增）。
+     *
+     * <p>夹在 {@code [0, maxRam]}：满了不溢出；加完立刻同步（HUD 要看到那一跳）。
+     *
+     * @return 实际加了多少（被上限截断时小于 {@code amount}）
+     */
+    public static double grant(ServerPlayer player, double amount) {
+        if (player == null || amount <= 0.0D) {
+            return 0.0D;
+        }
+        double max = CyberwareStats.maxRam(player);
+        double current = RamState.of(player).current();
+        double next = Math.min(max, Math.max(0.0D, current + amount));
+        if (next == current) {
+            return 0.0D;
+        }
+        RamState.set(player, next);
+        sync(player);
+        return next - current;
+    }
+
     /** 把玩家当前的 RAM/超频状态发给本人（HUD 契约）。 */
     public static void sync(ServerPlayer player) {
         if (player == null) {

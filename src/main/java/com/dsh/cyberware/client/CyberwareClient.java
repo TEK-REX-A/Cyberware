@@ -2,6 +2,7 @@ package com.dsh.cyberware.client;
 
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.client.post.SandevistanPostProcessor;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import com.dsh.cyberware.network.ActivatePayload;
 import com.dsh.cyberware.network.BerserkPayload;
@@ -70,10 +71,10 @@ public final class CyberwareClient {
         event.register(CyberwareKeys.ACTIVATE);
         // R 键轮盘：本任务（t13）只注册键位；触发逻辑（consumeClick → 打开轮盘）留给 t14。
         event.register(CyberwareKeys.RADIAL);
-        // G 键脑机超频（t25）
-        event.register(CyberwareKeys.OVERCLOCK);
-        // X 键歧路司扫描（t29，契约 §1.5）
+        // X 键：短按扫描 / 长按快速破解轮盘（t29 新增，t36 改双行为）
         event.register(CyberwareKeys.SCAN);
+        // t36：G 键已取消（契约 STEP4 §3 的键位最终形态）—— 脑机超频改成 R 轮盘里的一项，
+        // 这里不再注册任何超频键位。
     }
 
     /**
@@ -123,29 +124,81 @@ public final class CyberwareClient {
     private static final java.util.concurrent.atomic.AtomicBoolean LOCK_FAIL_LOGGED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
+    /** X 键长按阈值（契约 STEP4 §3）：按住满这么久就立刻打开快速破解轮盘 */
+    private static final long SCAN_HOLD_MS = 300L;
+    /** X 键状态机的保命日志去重（同 LOCK_FAIL_LOGGED 的写法） */
+    private static final java.util.concurrent.atomic.AtomicBoolean SCAN_FAIL_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** X 键是否处于「按住」状态（看物理键，不看 KeyMapping） */
+    private static boolean scanHeld;
+    /** 本次按住的起始毫秒 */
+    private static long scanPressMs;
+    /** 本次按住是否已经开过破解轮盘 → 松手时不再发扫描（两种行为不会同时触发） */
+    private static boolean scanWheelOpened;
+
+    /**
+     * X 键双行为（t36，契约 STEP4 §3）：<b>短按 = 扫描，长按 = 快速破解轮盘</b>。
+     *
+     * <p>状态机看的是<b>物理按键</b>（{@code InputConstants.isKeyDown}），所以：
+     * <ul>
+     *   <li>按下 → 记时刻；</li>
+     *   <li>按住满 {@link #SCAN_HOLD_MS} → <b>立刻</b>打开破解轮盘，并置
+     *       {@code scanWheelOpened}（松手时不再发扫描 —— 两条路互斥）；</li>
+     *   <li>松开且没开过轮盘 → 发一次 {@code HackPayload.scan()}。</li>
+     * </ul>
+     * 长按时若没有锁定目标，<b>不开发空盘</b>，只给一条「无锁定目标」提示 ——
+     * 且仍然算「已处理」，松手不会补发扫描（避免「长按没反应却突然扫描」）。
+     */
+    private static void pollScanKey() {
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            var window = minecraft.getWindow();
+            int key = CyberwareKeys.SCAN.getKey().getValue();
+            // 清掉 KeyMapping 的 click 计数：这套状态机看物理键，click 留着只会堆积
+            while (CyberwareKeys.SCAN.consumeClick()) {
+                // 只为清计数
+            }
+            boolean down = window != null && window.handle() != 0L
+                    && InputConstants.isKeyDown(window, key);
+            long now = System.currentTimeMillis();
+            if (down && !scanHeld) {
+                scanHeld = true;
+                scanPressMs = now;
+                scanWheelOpened = false;
+            } else if (down && scanHeld && !scanWheelOpened && now - scanPressMs >= SCAN_HOLD_MS) {
+                scanWheelOpened = true;
+                if (HackClientState.hasLock()) {
+                    HackRadialScreen.openIfLocked(minecraft);
+                } else {
+                    HackClientState.showNote("NO_TARGET");
+                }
+            } else if (!down && scanHeld) {
+                scanHeld = false;
+                if (!scanWheelOpened) {
+                    ClientPacketDistributor.sendToServer(HackPayload.scan());
+                }
+            }
+        } catch (Throwable t) {
+            if (SCAN_FAIL_LOGGED.compareAndSet(false, true)) {
+                Cyberware.LOGGER.warn("[cyberware] X 键状态机异常（已忽略，不影响游戏）", t);
+            }
+        }
+    }
+
     /** 按键触发 → 发一句请求给服务端（服务端才是有权改数据的一方）。 */
     private static void onClientTick(ClientTickEvent.Post event) {
         while (CyberwareKeys.ACTIVATE.consumeClick()) {
             // V 键 = 手持激活：defId 用 HELD（空串），服务端行为与以前完全一致
             ClientPacketDistributor.sendToServer(new ActivatePayload(ActivatePayload.HELD));
         }
-        // R 键 = 上下文轮盘（t29，契约 §1.3）：
-        //   **有锁定目标 → 破解轮盘**；无目标 → 回落到义体轮盘（t14/t15 行为一字不改）。
+        // R 键 = 义体轮盘（t36 起还有「脑机超频」一项，契约 STEP4 §3）。
+        // 注意：t36 取消了「有锁定目标 → 破解轮盘」的上下文切换 ——
+        // 破解轮盘现在归 X 长按（见下方），R 只做义体轮盘这一件事。
         while (CyberwareKeys.RADIAL.consumeClick()) {
-            if (HackClientState.hasLock()) {
-                HackRadialScreen.openIfLocked(Minecraft.getInstance());
-            } else {
-                CyberwareRadialScreen.openOrHint(Minecraft.getInstance());
-            }
+            CyberwareRadialScreen.openOrHint(Minecraft.getInstance());
         }
-        // G 键 = 脑机超频开关（t25）。只发「请求切换」：能否开由服务端裁决（装没装接入仓/冷却中）。
-        while (CyberwareKeys.OVERCLOCK.consumeClick()) {
-            ClientPacketDistributor.sendToServer(OverclockPayload.toggleRequest());
-        }
-        // X 键 = 歧路司扫描（t29，契约 §1.1）。只发请求；装没装义眼、扫谁、持续多久都在服务端。
-        while (CyberwareKeys.SCAN.consumeClick()) {
-            ClientPacketDistributor.sendToServer(HackPayload.scan());
-        }
+        // X 键双行为（t36，契约 STEP4 §3）：短按(<300ms)发扫描；按住满 300ms 立刻开破解轮盘。
+        pollScanKey();
 
         Minecraft minecraft = Minecraft.getInstance();
 
