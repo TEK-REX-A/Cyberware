@@ -4,6 +4,9 @@ import com.dsh.cyberware.client.post.SandevistanPostProcessor;
 import net.minecraft.client.Minecraft;
 import com.dsh.cyberware.network.ActivatePayload;
 import com.dsh.cyberware.network.BerserkPayload;
+import com.dsh.cyberware.network.HackPayload;
+import com.dsh.cyberware.network.OverclockPayload;
+import com.dsh.cyberware.network.RamPayload;
 import com.dsh.cyberware.network.TimeDilationPayload;
 import com.dsh.cyberware.registry.ModMenus;
 import net.minecraft.world.level.Level;
@@ -12,6 +15,7 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
 import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
 import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
@@ -29,6 +33,7 @@ public final class CyberwareClient {
     public static void init(IEventBus modEventBus) {
         modEventBus.addListener(CyberwareClient::onRegisterMenuScreens);
         modEventBus.addListener(CyberwareClient::onRegisterPayloads);
+        modEventBus.addListener(CyberwareClient::onRegisterClientPayloads);
         modEventBus.addListener(CyberwareClient::onRegisterKeys);
 
         // 注意：这里**不再**缩放生物动画。
@@ -38,6 +43,9 @@ public final class CyberwareClient {
         NeoForge.EVENT_BUS.addListener(SandevistanOverlay::onRenderGui);
         NeoForge.EVENT_BUS.addListener(SandevistanHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(BerserkHud::onRenderGui);
+        // 脑机超频（t25）：RAM 条 + 全屏特效 + 头顶全息面板 + 生物荧光轮廓
+        NeoForge.EVENT_BUS.addListener(RamHud::onRenderGui);
+        NeoForge.EVENT_BUS.addListener(OverclockWireframe::onRenderLiving);
         // 斯安威斯坦拖影（只对本地玩家）
         NeoForge.EVENT_BUS.addListener(AfterimageRenderer::onRenderLiving);
         // 投射物时间减缓：客户端这一半 —— 与服务端同相位跳 tick（见类注释）
@@ -59,6 +67,24 @@ public final class CyberwareClient {
         event.register(CyberwareKeys.ACTIVATE);
         // R 键轮盘：本任务（t13）只注册键位；触发逻辑（consumeClick → 打开轮盘）留给 t14。
         event.register(CyberwareKeys.RADIAL);
+        // G 键脑机超频（t25）
+        event.register(CyberwareKeys.OVERCLOCK);
+    }
+
+    /**
+     * <b>客户端包处理（t25 P0 第一件事）</b> —— 契约 §3.4 点名的交接点。
+     *
+     * <p>三个包在 {@code CyberwareNetwork} 里只有服务端 handler（{@code RamPayload} 用的是
+     * 无 handler 的 {@code playToClient}）—— 不在这里补客户端 handler，客户端收到包会报
+     * 「没有 handler」。所有处理都只是<b>更新显示状态</b>，绝不改玩法数据。
+     */
+    private static void onRegisterClientPayloads(RegisterClientPayloadHandlersEvent event) {
+        event.register(RamPayload.TYPE,
+                (payload, context) -> context.enqueueWork(() -> RamClientState.onRamPayload(payload)));
+        event.register(OverclockPayload.TYPE,
+                (payload, context) -> context.enqueueWork(() -> RamClientState.onOverclockPayload(payload)));
+        event.register(HackPayload.TYPE,
+                (payload, context) -> context.enqueueWork(() -> RamClientState.onHackPayload(payload)));
     }
 
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
@@ -95,6 +121,10 @@ public final class CyberwareClient {
         while (CyberwareKeys.RADIAL.consumeClick()) {
             CyberwareRadialScreen.openOrHint(Minecraft.getInstance());
         }
+        // G 键 = 脑机超频开关（t25）。只发「请求切换」：能否开由服务端裁决（装没装接入仓/冷却中）。
+        while (CyberwareKeys.OVERCLOCK.consumeClick()) {
+            ClientPacketDistributor.sendToServer(OverclockPayload.toggleRequest());
+        }
 
         Minecraft minecraft = Minecraft.getInstance();
 
@@ -110,7 +140,13 @@ public final class CyberwareClient {
             ParticleTickClock.clear();
             WeatherTickClock.reset();
             AfterimageHistory.clear();
+            // 脑机超频：绝对时间戳（警告/瘫痪/激活/撕裂窗口）必须清，否则新世界拿旧账渲染
+            RamClientState.clear();
         }
+
+        // 脑机超频：低 RAM 边沿检测 + 音效/粒子调度（全部限频，见 RamHud）
+        RamClientState.tick();
+        RamHud.tick();
 
         SandevistanPostProcessor.tick();
 

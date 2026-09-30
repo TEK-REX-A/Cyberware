@@ -38,6 +38,19 @@ public final class CyberwareKeys {
             InputConstants.KEY_R,
             CATEGORY);
 
+    /**
+     * 脑机超频开关（默认 G，t25）。
+     *
+     * <p>客户端只发「请求切换」的 {@code OverclockPayload.TOGGLE}；能不能开
+     * （装了网络接入仓吗？在冷却吗？）全部由服务端裁决，客户端不做任何判定。
+     * 键位显示名需要 lang：{@code key.cyberware.overclock}。
+     */
+    public static final KeyMapping OVERCLOCK = new KeyMapping(
+            "key.cyberware.overclock",
+            InputConstants.Type.KEYSYM,
+            InputConstants.KEY_G,
+            CATEGORY);
+
     private CyberwareKeys() {
     }
 }

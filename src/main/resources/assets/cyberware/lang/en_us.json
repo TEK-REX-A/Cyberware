@@ -47,5 +47,7 @@
   "cyberware.ui.implants": "Implants",
   "cyberware.ui.equipped": "Equipped",
   "cyberware.ui.variant": "Variant",
-  "cyberware.ui.unknown": "Unknown"
+  "cyberware.ui.unknown": "Unknown",
+  "key.cyberware.radial": "Cyberware Radial",
+  "key.cyberware.overclock": "Overclock Cyberware"
 }

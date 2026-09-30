@@ -8,7 +8,8 @@ package com.dsh.cyberware.core;
  * —— 需要在测试阶段由主人确认手感（见 TODO）。
  */
 public enum CyberwareSlot {
-    OPERATING_SYSTEM("操作系统", 1, 1),
+    /** 操作系统槽上限 2（主人 0.4.0 拍板）：网络接入仓与斯安威斯坦/狂暴同属这一槽，只装 1 件就挤掉了。 */
+    OPERATING_SYSTEM("操作系统", 1, 2),
     FRONTAL_CORTEX("前额皮质", 2, 1),
     FACE("面部", 3, 1),
     NERVOUS_SYSTEM("神经系统", 4, 1),

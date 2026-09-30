@@ -164,5 +164,6 @@
   "item.cyberware.nano_relay": "纳米继电器",
   "item.cyberware.detoxifier": "解毒器",
   "item.cyberware.edge_enhancement_system": "边缘增强系统",
-  "item.cyberware.fireproof_coating": "防火涂层"
+  "item.cyberware.fireproof_coating": "防火涂层",
+  "key.cyberware.overclock": "脑机超频"
 }

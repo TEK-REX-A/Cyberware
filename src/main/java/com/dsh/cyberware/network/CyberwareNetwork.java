@@ -2,8 +2,12 @@ package com.dsh.cyberware.network;
 
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.core.CyberwareAbilities;
+import com.dsh.cyberware.core.HackSystem;
+import com.dsh.cyberware.core.OverclockSystem;
+import com.dsh.cyberware.event.CombatEffectsHandler;
 import com.dsh.cyberware.menu.CyberwareStationService;
 import net.minecraft.server.level.ServerPlayer;
+import net.neoforged.neoforge.common.NeoForge;
 import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import net.neoforged.neoforge.network.registration.PayloadRegistrar;
@@ -15,11 +19,13 @@ public final class CyberwareNetwork {
      * 协议版本号：改了 payload 结构就往上加，避免旧客户端连新服务端出错。
      *
      * <p>0.3.12 {@code CyberwareActionPayload} 多了 {@code defId} → {@code "2"}；
-     * 随后 {@code ActivatePayload} 从无参 record 改成带 {@code defId} 的 record → 升到 {@code "3"}。
+     * 随后 {@code ActivatePayload} 从无参 record 改成带 {@code defId} 的 record → {@code "3"}。
+     * 0.4.0 RAM System 新增 {@code RamPayload} / {@code OverclockPayload} / {@code HackPayload}
+     * → {@code "4"}。
      * 注意 NeoForge 的版本号是**按 channel（payload）**协商的（见 {@code NetworkPayloadSetup}），
      * 所以客户端 {@code CyberwareClient} 里那两个 S2C 包的 {@code "1"} 不受影响。
      */
-    public static final String PROTOCOL_VERSION = "3";
+    public static final String PROTOCOL_VERSION = "4";
 
     private CyberwareNetwork() {
     }
@@ -38,6 +44,67 @@ public final class CyberwareNetwork {
                 ActivatePayload.TYPE,
                 ActivatePayload.STREAM_CODEC,
                 CyberwareNetwork::handleActivate);
+
+        // 服务端 → 客户端：RAM HUD 快照（单向；客户端 handler 由 client 侧注册）
+        registrar.playToClient(
+                RamPayload.TYPE,
+                RamPayload.STREAM_CODEC);
+
+        // 双向：超频（上行 TOGGLE / 下行 STATE）
+        registrar.playBidirectional(
+                OverclockPayload.TYPE,
+                OverclockPayload.STREAM_CODEC,
+                CyberwareNetwork::handleOverclockToggle);
+
+        // 双向：破解（上行 CAST / 下行 锁定·上传·结果·被拒）
+        registrar.playBidirectional(
+                HackPayload.TYPE,
+                HackPayload.STREAM_CODEC,
+                CyberwareNetwork::handleHackCast);
+
+        // RAM 玩法（t24）需要的运行时监听。
+        // 沿用本项目「显式注册、不依赖 @EventBusSubscriber 注解扫描」的口径（注解漏扫会静默失效，
+        // 而这里漏注册 = 破解不生效 / 系统重置的 NoAI 到期不恢复 / 武器故障不拦投掷物）。
+        // register() 由 Cyberware 构造器在两端各挂一次，监听器内部都带 isClientSide/ServerPlayer 判定。
+        NeoForge.EVENT_BUS.addListener(CombatEffectsHandler::onEntityTick);
+        NeoForge.EVENT_BUS.addListener(CombatEffectsHandler::onEntityJoinLevel);
+        NeoForge.EVENT_BUS.addListener(CombatEffectsHandler::onServerStopped);
+        NeoForge.EVENT_BUS.addListener(CombatEffectsHandler::onPlayerLoggedOut);
+    }
+
+    /**
+     * 超频切换请求（C2S）。
+     *
+     * <p>客户端只表达「我要切换」，能不能开由 {@link OverclockSystem#toggle} 在服务端裁决
+     * （装了网络接入仓吗、在不在冷却）；客户端字段一律不作数。
+     */
+    private static void handleOverclockToggle(OverclockPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (payload.action() != OverclockPayload.Action.TOGGLE) {
+                return;   // 下行包（STATE）不该出现在服务端
+            }
+            if (context.player() instanceof ServerPlayer serverPlayer) {
+                OverclockSystem.toggle(serverPlayer);
+            }
+        });
+    }
+
+    /**
+     * 破解释放请求（C2S）→ 交服务端玩法层 {@link HackSystem#request}。
+     *
+     * <p>t24：目标校验、收费（RAM / 濒死超频扣血 / 瘫痪拒绝）、上传计时、效果全部在服务端；
+     * 客户端传的 {@code hackId} 与 {@code targetEntityId} 都只是「意图」。
+     */
+    private static void handleHackCast(HackPayload payload, IPayloadContext context) {
+        context.enqueueWork(() -> {
+            if (payload.action() != HackPayload.Action.CAST) {
+                return;
+            }
+            if (!(context.player() instanceof ServerPlayer serverPlayer)) {
+                return;
+            }
+            HackSystem.request(serverPlayer, payload.targetEntityId(), payload.hackId());
+        });
     }
 
     /**
