@@ -1,10 +1,9 @@
 package com.dsh.cyberware.client;
 
 import com.dsh.cyberware.core.TimeDilationManager;
-import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.CopyOnWriteArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
@@ -52,7 +51,18 @@ public final class ClientTimeDilation {
         }
     }
 
-    private static final List<Source> SOURCES = new ArrayList<>();
+    /**
+     * 客户端减速源列表。
+     *
+     * <p><b>为什么用 {@link CopyOnWriteArrayList}</b>：这张表**读得极频繁、写得极少** ——
+     * 粒子每刻、每个生物每帧都会来查（{@link #ratioAt}），而写入只有服务端每 20 刻一次的广播。
+     * 写时复制的遍历是**快照**，天然不会抛 {@code ConcurrentModificationException}。
+     *
+     * <p>0.5.1 真机崩溃（{@code Ticking Particle → ratioAt(:126) → ArrayList$Itr.remove}）
+     * 就是"遍历的同时删元素"引起的。现在读取路径**只读不写**，删除统一交给
+     * {@link #applyOnClient} 里的 {@code removeIf}（每次新增前必清一次，所以不会攒）。
+     */
+    private static final List<Source> SOURCES = new CopyOnWriteArrayList<>();
 
     /**
      * 清空所有减速源（换世界时调用）。
@@ -120,11 +130,12 @@ public final class ClientTimeDilation {
         }
         long now = now();
         float best = 0.0F;
-        for (Iterator<Source> it = SOURCES.iterator(); it.hasNext(); ) {
-            Source s = it.next();
+        // ⚠ 这里是**纯读取**：粒子每刻都会走这条路径，历史版本在这里 it.remove()，
+        // 结果一边遍历一边改表 → ConcurrentModificationException（0.5.1 真机崩溃）。
+        // 过期条目跳过即可，真正的清理在 applyOnClient 的 removeIf（每次 add 前必执行）。
+        for (Source s : SOURCES) {
             if (now >= s.endTick) {
-                it.remove();
-                continue;
+                continue;   // 过期：跳过，**不删**
             }
             double dx = x - s.x;
             double dy = y - s.y;
