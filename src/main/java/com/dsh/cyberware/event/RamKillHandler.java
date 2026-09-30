@@ -7,6 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.NeutralMob;
 import net.minecraft.world.entity.animal.Animal;
+import net.minecraft.world.entity.animal.golem.AbstractGolem;
 import net.minecraft.world.entity.monster.Enemy;
 import net.minecraft.world.entity.player.Player;
 import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
@@ -17,14 +18,17 @@ import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
  * <p>判定（全部在服务端，客户端不参与）：
  * <ol>
  *   <li>击杀者必须是 {@link ServerPlayer}（{@code source.getEntity()}）；</li>
- *   <li>受害者排除玩家、排除 {@link Animal}（狼/蜂/北极熊等）；</li>
- *   <li>受害者必须是 {@link Enemy}（僵尸/骷髅/掠夺者/猪灵…）**或** {@link NeutralMob}（末影人…）
- *       —— 村民、铁傀儡既不是 Enemy 也不是 NeutralMob，天然被排除，不需要额外判断；</li>
+ *   <li>受害者排除玩家、排除 {@link Animal}（狼/蜂/北极熊等，{@code Animal} 是<strong>抽象类</strong>）；</li>
+ *   <li>受害者必须是 {@link Enemy}（僵尸/骷髅/掠夺者/猪灵…）**或** {@link NeutralMob}（末影人…）；</li>
+ *   <li>**额外排除 {@link AbstractGolem}（铁傀儡/雪傀儡）** —— 0.5.1 验收发现
+ *       {@code IronGolem implements NeutralMob} 且 {@code AbstractGolem} 不是 {@code Animal}，
+ *       若不排除，**铁傀儡农场会变成无限刷 RAM 的通道**（村庄守卫也不该被当成"中立怪"奖励）；</li>
  *   <li>给多少：**超频中 +4、常态 +2**，由 {@link RamSystem#grant} 夹在 {@code [0, maxRam]}（满了不溢出）。</li>
  * </ol>
  *
- * <p>{@code Enemy} / {@link NeutralMob} / {@link Animal} 三个都是接口（javap 核实过），
- * 所以 {@code instanceof} 判断就是官方的「敌意 / 中立 / 动物」分类。
+ * <p>类性质（javap 核实）：{@code Enemy} / {@link NeutralMob} 是接口，{@link Animal} 与
+ * {@link AbstractGolem} 是类；村民既不是 Enemy 也不是 NeutralMob，所以天然被排除，
+ * **铁傀儡不是** —— 它必须显式排除。
  */
 public final class RamKillHandler {
 
@@ -48,8 +52,11 @@ public final class RamKillHandler {
         if (victim instanceof Animal) {
             return;   // 动物排除
         }
+        if (victim instanceof AbstractGolem) {
+            return;   // 铁傀儡/雪傀儡排除（IronGolem 是 NeutralMob，不排就会变成刷 RAM 通道）
+        }
         if (!(victim instanceof Enemy) && !(victim instanceof NeutralMob)) {
-            return;   // 既不是敌意也不是中立 → 不给（村民/铁傀儡落在这里）
+            return;   // 既不是敌意也不是中立 → 不给（村民落在这里）
         }
         if (!(event.getSource().getEntity() instanceof ServerPlayer killer)) {
             return;   // 只认玩家击杀（环境伤害、生物互殴都不算）
