@@ -1,6 +1,6 @@
 modLoader = "javafml"
 loaderVersion = "[1,)"
-license = "GPL-3.0-only"
+license = "AGPL-3.0-only"
 issueTrackerURL = "https://github.com/TEK-REX-A/Cyberware/issues"
 
 [[mods]]
@@ -13,11 +13,11 @@ description = '''
 
 【素材声明 / Assets Notice】
 本模组的贴图与图标素材提取自《赛博朋克 2077》(Cyberpunk 2077)，
-版权归 CD Projekt Red 所有，且不在本模组代码的 GPL-3.0 许可范围内。
+版权归 CD Projekt Red 所有，且不在本模组代码的 AGPL-3.0 许可范围内。
 本项目为非商业性粉丝作品，与 CD Projekt Red 无隶属关系，亦未获其官方授权或背书。
 
 Textures and icons are derived from Cyberpunk 2077 and remain the property of
-CD Projekt Red. They are NOT covered by the GPL-3.0 license of this mod code.
+CD Projekt Red. They are NOT covered by the AGPL-3.0 license of this mod code.
 This is a non-commercial fan project, not affiliated with or endorsed by CDPR.
 '''
 
