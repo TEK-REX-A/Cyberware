@@ -1,5 +1,6 @@
 package com.dsh.cyberware.client;
 
+import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.client.post.SandevistanPostProcessor;
 import net.minecraft.client.Minecraft;
 import com.dsh.cyberware.network.ActivatePayload;
@@ -46,6 +47,8 @@ public final class CyberwareClient {
         // 脑机超频（t25）：RAM 条 + 全屏特效 + 头顶全息面板 + 生物荧光轮廓
         NeoForge.EVENT_BUS.addListener(RamHud::onRenderGui);
         NeoForge.EVENT_BUS.addListener(OverclockWireframe::onRenderLiving);
+        // 快速破解（t29）：折角锁定框 + 上传进度条 + 提示条
+        NeoForge.EVENT_BUS.addListener(HackHud::onRenderGui);
         // 斯安威斯坦拖影（只对本地玩家）
         NeoForge.EVENT_BUS.addListener(AfterimageRenderer::onRenderLiving);
         // 投射物时间减缓：客户端这一半 —— 与服务端同相位跳 tick（见类注释）
@@ -69,6 +72,8 @@ public final class CyberwareClient {
         event.register(CyberwareKeys.RADIAL);
         // G 键脑机超频（t25）
         event.register(CyberwareKeys.OVERCLOCK);
+        // X 键歧路司扫描（t29，契约 §1.5）
+        event.register(CyberwareKeys.SCAN);
     }
 
     /**
@@ -84,7 +89,11 @@ public final class CyberwareClient {
         event.register(OverclockPayload.TYPE,
                 (payload, context) -> context.enqueueWork(() -> RamClientState.onOverclockPayload(payload)));
         event.register(HackPayload.TYPE,
-                (payload, context) -> context.enqueueWork(() -> RamClientState.onHackPayload(payload)));
+                (payload, context) -> context.enqueueWork(() -> {
+                    // t25 的瘫痪红字 + t29 的锁定/上传进度，各处管各处的显示状态
+                    RamClientState.onHackPayload(payload);
+                    HackClientState.onHackPayload(payload);
+                }));
     }
 
     private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
@@ -110,20 +119,32 @@ public final class CyberwareClient {
      */
     private static Level lastLevel;
 
+    /** 保命日志去重（t34 / inspector F1）：每 tick 的锁定计算抛异常只记一次，绝不刷屏 */
+    private static final java.util.concurrent.atomic.AtomicBoolean LOCK_FAIL_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
     /** 按键触发 → 发一句请求给服务端（服务端才是有权改数据的一方）。 */
     private static void onClientTick(ClientTickEvent.Post event) {
         while (CyberwareKeys.ACTIVATE.consumeClick()) {
             // V 键 = 手持激活：defId 用 HELD（空串），服务端行为与以前完全一致
             ClientPacketDistributor.sendToServer(new ActivatePayload(ActivatePayload.HELD));
         }
-        // R 键 = 义体轮盘（按住弹出、松开施放）。轮盘自己管后续关闭/发包，这里只负责开；
-        // openOrHint 内部会挡掉「界面已开着」和「一件主动义体都没有」两种情况。
+        // R 键 = 上下文轮盘（t29，契约 §1.3）：
+        //   **有锁定目标 → 破解轮盘**；无目标 → 回落到义体轮盘（t14/t15 行为一字不改）。
         while (CyberwareKeys.RADIAL.consumeClick()) {
-            CyberwareRadialScreen.openOrHint(Minecraft.getInstance());
+            if (HackClientState.hasLock()) {
+                HackRadialScreen.openIfLocked(Minecraft.getInstance());
+            } else {
+                CyberwareRadialScreen.openOrHint(Minecraft.getInstance());
+            }
         }
         // G 键 = 脑机超频开关（t25）。只发「请求切换」：能否开由服务端裁决（装没装接入仓/冷却中）。
         while (CyberwareKeys.OVERCLOCK.consumeClick()) {
             ClientPacketDistributor.sendToServer(OverclockPayload.toggleRequest());
+        }
+        // X 键 = 歧路司扫描（t29，契约 §1.1）。只发请求；装没装义眼、扫谁、持续多久都在服务端。
+        while (CyberwareKeys.SCAN.consumeClick()) {
+            ClientPacketDistributor.sendToServer(HackPayload.scan());
         }
 
         Minecraft minecraft = Minecraft.getInstance();
@@ -142,11 +163,23 @@ public final class CyberwareClient {
             AfterimageHistory.clear();
             // 脑机超频：绝对时间戳（警告/瘫痪/激活/撕裂窗口）必须清，否则新世界拿旧账渲染
             RamClientState.clear();
+            // 快速破解（t29）：锁定目标 id 与上传进度/提示时间戳同样必须清
+            HackClientState.clear();
         }
 
         // 脑机超频：低 RAM 边沿检测 + 音效/粒子调度（全部限频，见 RamHud）
         RamClientState.tick();
         RamHud.tick();
+        // 快速破解：每 tick 重算一次锁定目标（屏幕中心 10% / ≤20 格 / 最近活体）
+        // 保命壳（t34 / inspector F1）：这是每 tick 回调，抛异常会当场崩客户端 ——
+        // 整段 try/catch，异常只记一次日志（不刷屏）。行为与 t29 完全一致，只多了一层壳。
+        try {
+            HackClientState.tickLock();
+        } catch (Throwable t) {
+            if (LOCK_FAIL_LOGGED.compareAndSet(false, true)) {
+                Cyberware.LOGGER.warn("[cyberware] 锁定目标计算异常（已忽略，不影响游戏）", t);
+            }
+        }
 
         SandevistanPostProcessor.tick();
 

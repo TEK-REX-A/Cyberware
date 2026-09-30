@@ -51,6 +51,19 @@ public final class CyberwareKeys {
             InputConstants.KEY_G,
             CATEGORY);
 
+    /**
+     * 歧路司扫描（默认 X，t29，契约 §1.5）。
+     *
+     * <p>客户端只发 {@code HackPayload.scan()}（{@code action=SCAN / hackId="scan" /
+     * targetEntityId=-1}）；装没装歧路司义眼、扫谁、持续多久全在服务端裁决
+     * （未装会回 {@code REJECTED / NO_KIROSHI}）。键位显示名需要 lang：{@code key.cyberware.scan}。
+     */
+    public static final KeyMapping SCAN = new KeyMapping(
+            "key.cyberware.scan",
+            InputConstants.Type.KEYSYM,
+            InputConstants.KEY_X,
+            CATEGORY);
+
     private CyberwareKeys() {
     }
 }

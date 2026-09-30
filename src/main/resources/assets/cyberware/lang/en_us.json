@@ -49,5 +49,6 @@
   "cyberware.ui.variant": "Variant",
   "cyberware.ui.unknown": "Unknown",
   "key.cyberware.radial": "Cyberware Radial",
-  "key.cyberware.overclock": "Overclock Cyberware"
+  "key.cyberware.overclock": "Overclock Cyberware",
+  "key.cyberware.scan": "Kiroshi Scan"
 }

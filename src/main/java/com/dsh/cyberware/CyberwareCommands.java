@@ -3,6 +3,9 @@ package com.dsh.cyberware;
 import com.dsh.cyberware.core.BerserkManager;
 import com.dsh.cyberware.core.CyberwareDefinition;
 import com.dsh.cyberware.core.CyberwareDefinitions;
+import com.dsh.cyberware.core.CyberwareStats;
+import com.dsh.cyberware.core.RamState;
+import com.dsh.cyberware.core.RamSystem;
 import com.dsh.cyberware.core.TimeDilationManager;
 import com.dsh.cyberware.event.BerserkHandler;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
@@ -19,6 +22,7 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  * /cyberware sandevistan              用后继型号 C4 的数值触发一次减速
  * /cyberware dilate &lt;比例&gt; &lt;秒&gt;    自定义比例与时长，例如 /cyberware dilate 0.5 6
  * /cyberware stop                     停止**一切**义体主动效果：时间减缓 + 狂暴
+ * /cyberware ram &lt;数值&gt;             把执行者当前 RAM 直接设成该值（夹在 [0, 上限]）—— t33 调试用
  * </pre>
  */
 public final class CyberwareCommands {
@@ -88,6 +92,35 @@ public final class CyberwareCommands {
                     ctx.getSource().sendSuccess(() -> Component.literal(
                             "[cyberware] 已停止：时间减缓 + 狂暴"), false);
                     return 1;
-                })));
+                }))
+                .then(Commands.literal("ram")
+                        .then(Commands.argument("value", DoubleArgumentType.doubleArg(0.0D, 10_000.0D))
+                                .executes(ctx -> {
+                                    // t33 调试命令：方便主人真机验证 RAM 条 / 警告态 / 濒死超频 / 瘫痪四种状态。
+                                    // 改的是**执行者自己**的 RAM（服务端附件），夹在 [0, max]。
+                                    ServerPlayer player = ctx.getSource().getPlayer();
+                                    if (player == null) {
+                                        ctx.getSource().sendFailure(Component.literal(
+                                                "[cyberware] /cyberware ram 只能由玩家执行（改的是执行者自己的 RAM）"));
+                                        return 0;
+                                    }
+                                    double requested = DoubleArgumentType.getDouble(ctx, "value");
+                                    double max = CyberwareStats.maxRam(player);
+                                    double before = RamState.of(player).current();
+                                    double after = Math.max(0.0D, Math.min(max, requested));
+                                    RamState.set(player, after);   // setData 顺带触发附件同步
+                                    RamSystem.sync(player);        // 再补一个 RamPayload：HUD 立刻拿到 max/regen/状态
+                                    ctx.getSource().sendSuccess(() -> Component.literal(
+                                            "[cyberware] RAM " + trim(before) + " → " + trim(after)
+                                                    + "（上限 " + trim(max) + "，恢复 "
+                                                    + trim(CyberwareStats.regenPerMinute(player)) + "/分钟）"), false);
+                                    return 1;
+                                }))));
+    }
+
+    /** 数值显示：整数不带小数点，小数保留两位（RAM 恢复是小数，进度会一直变）。 */
+    private static String trim(double value) {
+        return value == Math.floor(value) ? String.valueOf((long) value)
+                : String.format(java.util.Locale.ROOT, "%.2f", value);
     }
 }

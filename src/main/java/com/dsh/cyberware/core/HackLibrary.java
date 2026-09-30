@@ -15,27 +15,28 @@ import net.minecraft.world.entity.LivingEntity;
  */
 public enum HackLibrary {
 
-    /** 过热：点燃目标 + 降护甲。上传 1.0s。 */
+    /** 过热：点燃目标 + 降护甲。上传 1.0s（2077 官方 2.0s，本仓库取可玩下限 1.0s，见 HACK-VALUES §3.3）。 */
     OVERHEAT("overheat", "过热", 20, 4) {
         @Override
         public void apply(ServerPlayer caster, LivingEntity target) {
-            // TODO(主人填写): 3 秒 = 60 刻是占位值（邮件写「点燃目标 3 秒」）
+            // 邮件IX §四.4：「点燃目标3秒」→ 3 秒 = 60 刻（2077 官方 Duration 2s，按邮件口径优先）
             target.setRemainingFireTicks(60);
-            // TODO(主人填写): 护甲 -4 是占位值（邮件只说「降低护甲」）
-            CombatEffects.armorDebuff(target, 60, -4.0D);
+            // 2077 gamestegy Overheat T4「Melts enemy armor over time (max. -40%)」；
+            // 本仓库 armorDebuff 是 ADD_VALUE 平值，-40% 无法直填 → 主人裁决 A2 定为 -5 平值
+            CombatEffects.armorDebuff(target, 60, -5.0D);
             particles(target, ParticleTypes.FLAME, 12);
         }
     },
 
-    /** 短路：高额瞬间伤害 + 电火花。上传 1.5s。 */
-    SHORT_CIRCUIT("short_circuit", "短路", 30, 5) {
+    /** 短路：高额瞬间伤害 + 电火花。上传 1.0s（2077 官方 0.5s；本仓库 1.0s 下限，见 HACK-VALUES §3.2/§3.3）。 */
+    SHORT_CIRCUIT("short_circuit", "短路", 20, 5) {
         @Override
         public void apply(ServerPlayer caster, LivingEntity target) {
             if (!(target.level() instanceof ServerLevel level)) {
                 return;
             }
-            // TODO(主人填写): 8 点伤害是占位值（邮件写「高额瞬间伤害」，没给数字）
-            target.hurtServer(level, level.damageSources().indirectMagic(caster, caster), 8.0F);
+            // 2077 gamestegy Short Circuit：Damage 260（2077 量纲）→ 主人裁决 A3 定为 MC 量纲 10.0F
+            target.hurtServer(level, level.damageSources().indirectMagic(caster, caster), 10.0F);
             // 雷击粒子（原版粒子，不自造贴图）
             particles(target, ParticleTypes.CRIT, 20);
         }
@@ -45,7 +46,7 @@ public enum HackLibrary {
     SYNAPSE_BURNOUT("synapse_burnout", "突触熔断", 40, 3) {
         @Override
         public void apply(ServerPlayer caster, LivingEntity target) {
-            // TODO(主人填写): 5 秒 = 100 刻、等级 1 是占位值
+            // 邮件IX §四.4：「虚弱+缓慢5秒」→ 100 刻；效果等级 1 待主人裁决（A5，见 HACK-VALUES §4）
             target.addEffect(new MobEffectInstance(MobEffects.SLOWNESS, 100, 1));
             target.addEffect(new MobEffectInstance(MobEffects.WEAKNESS, 100, 1));
             particles(target, ParticleTypes.CRIT, 10);
@@ -56,7 +57,7 @@ public enum HackLibrary {
     WEAPON_GLITCH("weapon_glitch", "武器故障", 24, 6) {
         @Override
         public void apply(ServerPlayer caster, LivingEntity target) {
-            // TODO(主人填写): 8 秒 = 160 刻是占位值
+            // 邮件IX §四.4：「禁用目标远程攻击AI逻辑8秒」→ 160 刻
             CombatEffects.weaponGlitch(target, 160);
         }
     },
@@ -65,16 +66,27 @@ public enum HackLibrary {
     SYSTEM_RESET("system_reset", "系统重置", 50, 8) {
         @Override
         public void apply(ServerPlayer caster, LivingEntity target) {
-            // TODO(主人填写): 3 秒 = 60 刻是占位值
+            // 邮件IX §四.4：「目标无法移动与攻击3秒」→ 60 刻；RAM 8 = 邮件IX「消耗极高，如8点RAM」
             CombatEffects.disableAi(target, 60);
         }
     };
 
     private final String id;
     private final String displayName;
-    /** 上传刻数（20 刻 = 1 秒）。TODO(主人填写): 全部为占位值。 */
+    /**
+     * 上传刻数（20 刻 = 1 秒）。
+     *
+     * <p>出处：过热/短路 = 2077 gamestegy 官方值（2.0s / 0.5s）取本仓库 1.0s 下限；
+     * 突触熔断 / 武器故障 / 系统重置 = {@code TODO(待主人裁决: A1 2077 数值未能取得，见 HACK-VALUES.md §4)}。
+     */
     private final int uploadTicks;
-    /** RAM 占用。TODO(主人填写): 取自契约 §3 的占位表格。 */
+    /**
+     * RAM 占用。
+     *
+     * <p>出处：系统重置 8 = 邮件IX「消耗极高，如8点RAM」；其余为契约 §3 占位表
+     * —— 2077 满档值（过热 9 / 短路 10）在「默认上限 8」下会让破解放不出来，故不照抄（HACK-VALUES §3.1）；
+     * {@code TODO(待主人裁决: A1/A4 突触熔断 3、武器故障 6 的 2077 值未能取得)}。
+     */
     private final int ramCost;
 
     HackLibrary(String id, String displayName, int uploadTicks, int ramCost) {

@@ -3,10 +3,13 @@ package com.dsh.cyberware.core;
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.network.HackPayload;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
@@ -51,11 +54,72 @@ public final class HackSystem {
 
     private static final Map<UUID, Upload> UPLOADS = new HashMap<>();
 
-    /** TODO(主人填写): 濒死超频的生命代价与下限（邮件：扣 2 点生命、最低保留 1 颗心 = 2 HP）。 */
+    // 邮件IX §三.2 明文：濒死超频时「强制扣除玩家2点生命（不会致死，最低保留1颗心）」→ 2 点 / 1 颗心 = 2 HP
     private static final float DYING_HEALTH_COST = 2.0F;
     private static final float DYING_HEALTH_FLOOR = 2.0F;
 
+    /** 扫描 / 目标校验的统一距离上限：20 格（STEP3 契约 §1.1/§1.2 冻结值）。 */
+    private static final double SCAN_RANGE = 20.0D;
+    private static final double SCAN_RANGE_SQR = SCAN_RANGE * SCAN_RANGE;
+
+    /** 扫描发光时长：1200 刻 = 60 秒（STEP3 契约 §1.1 冻结值）。 */
+    private static final int GLOW_TICKS = 1200;
+
+    /** 拒绝原因（契约冻结字符串，客户端按它做提示）。 */
+    private static final String NO_KIROSHI = "NO_KIROSHI";
+    private static final String NO_TARGET = "NO_TARGET";
+
     private HackSystem() {
+    }
+
+    /**
+     * 歧路司义眼扫描（C2S {@code HackPayload.Action.SCAN} 的服务端处理，STEP3 契约 §1.1）。
+     *
+     * <p>服务端自己算，客户端只发请求：
+     * <ol>
+     *   <li>没装歧路司义眼（{@code kiroshi_*} / {@code iconic_advanced_kiroshi*} 任一）→
+     *       回 {@code REJECTED} + {@code note = "NO_KIROSHI"}；</li>
+     *   <li>装了 → 给施法者 **20 格内**的活体（不含自己）加 {@code MobEffects.GLOWING} 1200 刻。</li>
+     * </ol>
+     * 成功路径不回包（发光本身在世界里看得见）；契约只规定失败要回 {@code REJECTED}。
+     *
+     * @return 是否真的扫描了
+     */
+    public static boolean scan(ServerPlayer caster) {
+        if (caster == null) {
+            return false;
+        }
+        if (!hasKiroshiOptics(caster)) {
+            reject(caster, -1, "scan", NO_KIROSHI);
+            Cyberware.LOGGER.debug("[cyberware] 扫描被拒（未装歧路司义眼）：{}",
+                    caster.getName().getString());
+            return false;
+        }
+        List<LivingEntity> targets = caster.level().getEntitiesOfClass(LivingEntity.class,
+                caster.getBoundingBox().inflate(SCAN_RANGE),
+                entity -> entity != caster && entity.isAlive()
+                        && entity.distanceToSqr(caster) <= SCAN_RANGE_SQR);
+        for (LivingEntity entity : targets) {
+            entity.addEffect(new MobEffectInstance(MobEffects.GLOWING, GLOW_TICKS, 0));
+        }
+        Cyberware.LOGGER.debug("[cyberware] 歧路司扫描：{} 高亮 {} 个目标",
+                caster.getName().getString(), targets.size());
+        return true;
+    }
+
+    /**
+     * 歧路司义眼判定：安装表里有 {@code kiroshi_*} 或 {@code iconic_advanced_kiroshi*} 任一。
+     *
+     * <p>口径按 STEP3 契约 §1.1 冻结（前缀匹配，不是写死某几个 id —— 官方命名里有
+     * {@code kiroshi_optics_bare}/{@code _combined}/{@code _hunter}/{@code _wallhack} 等变体）。
+     */
+    private static boolean hasKiroshiOptics(ServerPlayer caster) {
+        for (String id : CyberwareInstallation.of(caster).installed().keySet()) {
+            if (id.startsWith("kiroshi_") || id.startsWith("iconic_advanced_kiroshi")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
@@ -97,8 +161,18 @@ public final class HackSystem {
             return false;
         }
         Entity target = caster.level().getEntity(targetEntityId);
-        if (!(target instanceof LivingEntity living) || !living.isAlive() || target == caster) {
-            reject(caster, targetEntityId, hackId, "no_target");
+        if (!(target instanceof LivingEntity living) || target == caster) {
+            reject(caster, targetEntityId, hackId, NO_TARGET);
+            return false;
+        }
+        // 服务端独立校验（STEP3 契约 §1.2，**不信任客户端**）：目标存活 / 距离 ≤ 20 / 有视线。
+        // 任一不过都在**扣费之前**拒绝 —— 不允许为无效目标扣 RAM。
+        if (!living.isAlive()
+                || caster.distanceToSqr(living) > SCAN_RANGE_SQR
+                || !caster.hasLineOfSight(living)) {
+            reject(caster, targetEntityId, hackId, NO_TARGET);
+            Cyberware.LOGGER.debug("[cyberware] 破解被拒（目标校验不过）：{} → 实体 {}",
+                    caster.getName().getString(), targetEntityId);
             return false;
         }
 
@@ -140,7 +214,8 @@ public final class HackSystem {
         }
         Entity target = caster.level().getEntity(upload.targetId());
         if (!(target instanceof LivingEntity living) || !living.isAlive()) {
-            // 目标死亡/消失/换维度：兜底清理（不退款 —— TODO(主人填写): 是否退款待主人定）
+            // 目标死亡/消失/换维度：兜底清理
+            // TODO(待主人裁决: 上传被取消是否退还已扣的 RAM —— 现为不退，见 HACK-VALUES.md 待裁决清单)
             UPLOADS.remove(caster.getUUID());
             send(caster, HackPayload.Action.CANCELLED, upload.targetId(), upload.hack().id(), 0,
                     upload.total(), 0, "target_lost");

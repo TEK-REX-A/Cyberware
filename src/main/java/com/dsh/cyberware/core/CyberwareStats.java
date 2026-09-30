@@ -25,13 +25,27 @@ public final class CyberwareStats {
     }
 
     /**
-     * 超频时长（秒）与冷却（秒）的占位表，下标 = {@link CyberwareRarity#ordinal()}。
+     * 超频时长（秒）与冷却（秒）表，下标 = {@link CyberwareRarity#ordinal()}。
      *
-     * <p>TODO(主人填写)：来源邮件只说「由网络接入仓的品质决定」，没给数字 ——
-     * 这里是占位值，主人调完同步改这张表即可（改完超频手感跟着变，无需动别处）。
+     * <p>出处：邮件IX「有持续时间和冷却时间（由网络接入仓的品质决定）」—— **秒数本身没有可查出处**。
+     * 主人裁决 B1 定为「保持现表」（方案①）；方案②（整体 +15s）见 {@code HACK-VALUES.md} §4-B1，
+     * 若改按方案②：时长 12/14/16/18/20/22、冷却 75/70/65/60/55/50。
+     *
+     * <p>{@code TODO(待主人裁决: B1 超频时长/冷却秒数无出处，现按方案①保留)}
      */
     private static final int[] OVERCLOCK_DURATION_SECONDS = {10, 12, 14, 16, 18, 20};
     private static final int[] OVERCLOCK_COOLDOWN_SECONDS = {60, 55, 50, 45, 40, 35};
+
+    /**
+     * 裸机（未装网络接入仓）的基础 RAM 恢复速率，单位：每分钟。
+     *
+     * <p>邮件IX 只说「默认上限 8、由接入仓决定恢复速率」，没说裸机速率；
+     * 取 1.0 的理由：接入仓的 {@code RAM_REGEN} 是 3~9/分钟量级，1.0 只是「涓流」，
+     * 保证「花光 8 点后不会永久卡死在 0/8」，同时把「想快就得装接入仓」留给玩家。
+     *
+     * <p>{@code TODO(主人裁决): 数值可调，0 也合法（= 与 0.4.0 同语义）。}
+     */
+    private static final double BASE_RAM_REGEN = 1.0D;
 
     private CyberwareStats() {
     }
@@ -64,17 +78,26 @@ public final class CyberwareStats {
     }
 
     /**
-     * RAM 上限 = Σ {@link CyberwareDefinition.Stats#RAM}。
+     * RAM 上限 = {@code max(8, Σ Stats.RAM)}。
+     *
+     * <p><b>那 8 点的来历</b>：邮件IX §二明文「玩家拥有 RAM 值（**默认上限 8**，由网络接入仓决定
+     * 最大上限和恢复速率）」→ 裸机也有 8 点基线。取 {@code max} 而不是「8 + Σ」的理由：
+     * ① 邮件口径就是「默认上限 8」；② 小接入仓（冬月电子1型 3 / 瑞草电子1型 4）不会把玩家削到比裸机更低；
+     * ③ 大接入仓（technica_4 = 12）+ RAM 配平/升级才是真正涨上限的路径；④ 破解成本 4~8 在裸机 8 点下
+     * 「一条一放」，装了接入仓才宽裕 —— 资源稀缺感保留。
      *
      * <p>数值表里这个键可以为负（例：{@code iconic_bio_conductors} RAM = -4），
-     * 所以这里是**求和后再夹到 0 以上** —— 负数上限没有意义，会让「灌满」逻辑失去意义。
+     * 所以是**求和后夹到基线以上** —— 负数上限没有意义，会让「灌满」逻辑失去意义。
      */
     public static double maxRam(Player player) {
-        return Math.max(0.0D, sum(player, CyberwareDefinition.Stats.RAM));
+        return Math.max(8.0D, sum(player, CyberwareDefinition.Stats.RAM));
     }
 
     /**
-     * 每分钟 RAM 恢复量 = Σ {@link CyberwareDefinition.Stats#RAM_REGEN}。
+     * 每分钟 RAM 恢复量 = {@link #BASE_RAM_REGEN} + Σ {@link CyberwareDefinition.Stats#RAM_REGEN}。
+     *
+     * <p><b>叠加，不是取最大</b>：接入仓与 RAM 升级/配平的恢复速率是相加关系
+     * （邮件IX 的算法口径是「把所有来源求和」），所以这里用 {@code 基础值 + Σ}。
      *
      * <p>单位按 {@code Stats.RAM_REGEN} 的声明口径取「每分钟」：邮件给的例子
      * 「四相传电1型 +6/分钟」与定义表里 {@code cyberdeck_tetratronic_1} 的 {@code ram_regen = 6}
@@ -82,11 +105,15 @@ public final class CyberwareStats {
      * 与「每分钟」口径冲突 —— 这属于定义表的数据问题，见交付文档「已知问题」，本聚合器只做求和、
      * 不做单位换算（换算会静默改掉数值）。
      *
+     * <p><b>旧存档不需要迁移代码</b>：0.4.0 期间已经建成 {@code current = 0} 的存档
+     * （那时基线是 0）会被这条涓流按 {@link #BASE_RAM_REGEN}/分钟 慢慢救回来 ——
+     * {@code RamSystem#settleRam} 每 20 刻给 current 加 {@code regenPerMinute / 60}，与存档新旧无关。
+     *
      * <p>不夹负数：若将来有人给某个义体负的恢复速率（掉 RAM 的副作用），
      * 「当前值」由 {@link RamState} 夹在 0 以上，这里如实返回。
      */
     public static double regenPerMinute(Player player) {
-        return sum(player, CyberwareDefinition.Stats.RAM_REGEN);
+        return BASE_RAM_REGEN + sum(player, CyberwareDefinition.Stats.RAM_REGEN);
     }
 
     /**

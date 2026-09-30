@@ -96,13 +96,21 @@ public final class RamClientState {
         }
     }
 
-    /** 破解包：本轮（t26 已取消）只取「被拒」的原因文本做红字提示，不做锁定框/上传条。 */
+    /**
+     * 破解包：只取「RAM 相关」的拒绝原因（t25 的瘫痪红字）。
+     *
+     * <p>t29 的锁定失败/无目标/未装义眼提示由 {@link HackClientState} + {@code HackHud} 负责 ——
+     * 这里只认 RAM 那条，免得同一件事被两个 HUD 各画一次。
+     */
     public static void onHackPayload(HackPayload payload) {
         if (payload == null || payload.action() != HackPayload.Action.REJECTED) {
             return;
         }
         String note = payload.note();
-        paralysisText = note == null || note.isBlank() ? "RAM ACCESS FAILED" : note;
+        if (note == null || !note.contains("RAM")) {
+            return;                                  // NO_KIROSHI / NO_TARGET 等交给 HackHud
+        }
+        paralysisText = note.isBlank() ? "RAM ACCESS FAILED" : note;
         paralysisStartMs = System.currentTimeMillis();
     }
 

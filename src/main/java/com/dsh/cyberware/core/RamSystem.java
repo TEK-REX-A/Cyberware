@@ -103,7 +103,8 @@ public final class RamSystem {
         double max = CyberwareStats.maxRam(player);
 
         if (!RamState.has(player)) {
-            // 第一次见到该玩家：灌满（此时 max 由已安装义体决定；没装就是 0）
+            // 第一次见到该玩家：灌满到上限。
+            // 上限 = max(8, Σ Stats.RAM)（邮件IX §二「默认上限 8」），所以裸机也会拿到 8 点，不是 0。
             RamState.set(player, max);
             return true;
         }
@@ -119,6 +120,10 @@ public final class RamSystem {
         }
         double perSecond = CyberwareStats.regenPerMinute(player) / 60.0D;
         if (perSecond == 0.0D) {
+            // 恢复速率为 0 的唯一途径：把 CyberwareStats.BASE_RAM_REGEN 调成 0（裸机涓流关掉）
+            // **且**没装任何给 RAM_REGEN 的接入仓/配平 —— 两种情形叠加才会走到这里。
+            // 裸机默认是 1.0/分钟（BASE_RAM_REGEN），所以「没接入仓」本身不再等于「不恢复」。
+            // TODO(主人裁决: BASE_RAM_REGEN 的数值可调，0 也合法 —— 那时本分支就是「完全不恢复」的语义)
             return false;
         }
         double next = Math.min(max, Math.max(0.0D, current + perSecond));

@@ -47,7 +47,15 @@ public record HackPayload(Action action, int targetEntityId, String hackId,
         /** 服务端 → 客户端：上传被打断 / 目标丢失 */
         CANCELLED,
         /** 服务端 → 客户端：请求被拒（原因在 note：如 {@code RAM ACCESS FAILED} / 冷却中 / 无目标） */
-        REJECTED;
+        REJECTED,
+        /**
+         * 客户端 → 服务端：歧路司义眼扫描（X 键，STEP3 契约 §1.1）。
+         *
+         * <p>⚠️ **必须加在 {@link #REJECTED} 之后**：{@link #byId(int)} 按 ordinal 解码，
+         * 插在中间会让 0.4.0 已有 action 的序号错位。协议版本因此保持 {@code "4"}
+         * （只是枚举值域扩展，字段结构与旧行为都没变）。
+         */
+        SCAN;
 
         public static Action byId(int id) {
             Action[] values = values();
@@ -85,5 +93,15 @@ public record HackPayload(Action action, int targetEntityId, String hackId,
     /** 客户端上行用的「释放破解」包。 */
     public static HackPayload cast(int targetEntityId, String hackId) {
         return new HackPayload(Action.CAST, targetEntityId, hackId, 0, 0, 0, "");
+    }
+
+    /**
+     * 客户端上行用的「歧路司扫描」包（X 键）。
+     *
+     * <p>字段按 STEP3 契约 §1.1 冻结：{@code action=SCAN}、{@code hackId="scan"}、
+     * {@code targetEntityId=-1}、其余数值字段 0 —— 收口在这里，客户端不用自己拼。
+     */
+    public static HackPayload scan() {
+        return new HackPayload(Action.SCAN, -1, "scan", 0, 0, 0, "");
     }
 }

@@ -90,20 +90,26 @@ public final class CyberwareNetwork {
     }
 
     /**
-     * 破解释放请求（C2S）→ 交服务端玩法层 {@link HackSystem#request}。
+     * 破解相关上行请求（C2S）：按 action 分流。
      *
-     * <p>t24：目标校验、收费（RAM / 濒死超频扣血 / 瘫痪拒绝）、上传计时、效果全部在服务端；
-     * 客户端传的 {@code hackId} 与 {@code targetEntityId} 都只是「意图」。
+     * <ul>
+     *   <li>{@code CAST} → {@link HackSystem#request}（目标校验 / 收费 / 上传 / 效果全在服务端）；</li>
+     *   <li>{@code SCAN} → {@link HackSystem#scan}（歧路司义眼校验 + 20 格内发光，STEP3 契约 §1.1）；</li>
+     *   <li>其余 action 是下行值，出现在服务端直接忽略。</li>
+     * </ul>
      */
     private static void handleHackCast(HackPayload payload, IPayloadContext context) {
         context.enqueueWork(() -> {
-            if (payload.action() != HackPayload.Action.CAST) {
-                return;
-            }
             if (!(context.player() instanceof ServerPlayer serverPlayer)) {
                 return;
             }
-            HackSystem.request(serverPlayer, payload.targetEntityId(), payload.hackId());
+            switch (payload.action()) {
+                case CAST -> HackSystem.request(serverPlayer, payload.targetEntityId(), payload.hackId());
+                case SCAN -> HackSystem.scan(serverPlayer);
+                default -> {
+                    // 下行 action（LOCKED/UPLOAD_*/APPLIED/CANCELLED/REJECTED）不该来自客户端
+                }
+            }
         });
     }
 
