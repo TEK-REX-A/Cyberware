@@ -99,6 +99,17 @@ public final class ClientTimeDilation {
         SOURCES.removeIf(s -> now >= s.endTick);
         SOURCES.add(new Source(x, y, z, Math.max(1.0F, radius), ratio,
                 now, now + Math.max(1, durationTicks), Math.max(1, durationTicks), owner));
+
+        // 开启音效（t38）：只在**新建一条源**时响一次 —— 也就是「这次减速真的开始了」。
+        // 上面那条刷新广播的分支已经 return，所以服务端每 20 刻的刷新不会重复触发；
+        // 减速结束、换维度、死亡都不经过这里。
+        // 只有**本地玩家自己**开的才播（别人开的减速我们只是旁观者）。
+        if (owner != null) {
+            LocalPlayer self = Minecraft.getInstance().player;
+            if (self != null && owner.equals(self.getUUID())) {
+                SandevistanSounds.playActivate();
+            }
+        }
     }
 
     /** 世界坐标 (x,y,z) 处的减速比例，0 = 不受影响。多条源重叠时取最强的一条。 */

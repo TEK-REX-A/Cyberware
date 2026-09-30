@@ -1,0 +1,8 @@
+{
+  "sandevistan_activate": {
+    "subtitle": "cyberware.subtitle.sandevistan_activate",
+    "sounds": [
+      "cyberware:sandevistan_activate"
+    ]
+  }
+}

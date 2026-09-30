@@ -50,5 +50,6 @@
   "cyberware.ui.unknown": "Unknown",
   "key.cyberware.radial": "Cyberware Radial",
   "key.cyberware.overclock": "Overclock Cyberware",
-  "key.cyberware.scan": "Kiroshi Scan"
+  "key.cyberware.scan": "Kiroshi Scan",
+  "cyberware.subtitle.sandevistan_activate": "Sandevistan activated"
 }

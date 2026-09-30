@@ -12,6 +12,7 @@ import com.dsh.cyberware.registry.ModComponents;
 import com.dsh.cyberware.registry.ModCreativeTabs;
 import com.dsh.cyberware.registry.ModItems;
 import com.dsh.cyberware.registry.ModMenus;
+import com.dsh.cyberware.registry.ModSounds;
 import net.neoforged.api.distmarker.Dist;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -42,6 +43,8 @@ public class Cyberware {
         ModComponents.COMPONENTS.register(modEventBus);
         ModAttachments.ATTACHMENTS.register(modEventBus);
         ModCreativeTabs.TABS.register(modEventBus);
+        // 音效（t38）：斯安威斯坦开启音效 —— 必须挂 mod 事件总线，挂错会静默不注册
+        ModSounds.SOUNDS.register(modEventBus);
 
         // ---- 网络包 ----
         modEventBus.addListener(CyberwareNetwork::register);
