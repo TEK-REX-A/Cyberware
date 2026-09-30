@@ -1,11 +1,14 @@
 package com.dsh.cyberware;
 
+import com.dsh.cyberware.core.BerserkManager;
 import com.dsh.cyberware.core.CyberwareDefinition;
 import com.dsh.cyberware.core.CyberwareDefinitions;
 import com.dsh.cyberware.core.TimeDilationManager;
+import com.dsh.cyberware.event.BerserkHandler;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.permissions.Permissions;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
@@ -13,9 +16,9 @@ import net.neoforged.neoforge.event.RegisterCommandsEvent;
  * 调试命令（第二步临时用，等按键绑定做好后再决定是否保留）。
  *
  * <pre>
- * /cyberware sandevistan              用「泽塔科技·斯安威斯坦·普通」的数值触发一次减速
+ * /cyberware sandevistan              用后继型号 C4 的数值触发一次减速
  * /cyberware dilate &lt;比例&gt; &lt;秒&gt;    自定义比例与时长，例如 /cyberware dilate 0.5 6
- * /cyberware stop                     立刻结束减速
+ * /cyberware stop                     停止**一切**义体主动效果：时间减缓 + 狂暴
  * </pre>
  */
 public final class CyberwareCommands {
@@ -66,8 +69,24 @@ public final class CyberwareCommands {
                                             return 1;
                                         }))))
                 .then(Commands.literal("stop").executes(ctx -> {
+                    // t22：一句"停"必须停干净 —— 原来只清减速，狂暴会留着（语义不一致）
                     TimeDilationManager.clear();
-                    ctx.getSource().sendSuccess(() -> Component.literal("[cyberware] 时间减缓已清除"), false);
+                    BerserkManager.clear();
+
+                    // 狂暴有客户端表现（HUD / 屏幕滤镜 / BerserkClientState）。
+                    // 服务端清表后，BerserkHandler.broadcast 会因为 isActive()==false 而发出
+                    // active=false 的 BerserkPayload —— 这是现有的"已结束"信号，不需要新增协议。
+                    // 广播给所有在线玩家（而不是只给刚才有状态的人）：这个包对没在狂暴的客户端
+                    // 是幂等的空操作，同时能覆盖"客户端本地状态比服务端表更旧"的情形。
+                    for (ServerPlayer online : ctx.getSource().getServer().getPlayerList().getPlayers()) {
+                        BerserkHandler.broadcast(online);
+                    }
+
+                    // 注意：时间减缓这一侧**没有**等价的"停止"信号可用（TimeDilationPayload 只有
+                    // duration/ratio/区域，客户端 applyOnClient 只会把结束时间往后推，从不缩短），
+                    // 所以这里不发减速包。客户端 HUD 的即时消失需要 client/ 侧改动，见 DEBT-CLEANUP-B.md §4。
+                    ctx.getSource().sendSuccess(() -> Component.literal(
+                            "[cyberware] 已停止：时间减缓 + 狂暴"), false);
                     return 1;
                 })));
     }

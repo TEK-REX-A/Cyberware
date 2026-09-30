@@ -289,24 +289,13 @@ public final class TimeDilationManager {
     }
 
     /**
-     * 清理记录：所属世界已卸载的，以及在**各自**世界时间轴上已过期的。
+     * 全清。注意：换世界**不再依赖**它（见 {@link #liveIn}），这里留给调试命令用
+     * （{@code /cyberware stop}）。
      *
-     * <p>0.3.11 的版本是「拿传进来的 level 的 gameTime 去比所有记录的 expireAt」，
-     * 那在跨维度时本身就是错的（不同维度时间轴不同），删错/不删都可能发生。
-     * 参数因此不再需要（记录自己知道属于哪个世界），调用方只有 0 处。
+     * <p>0.3.12 技术债清理（t22）：原先同文件还有一个独立的 {@code prune()}，全仓 0 调用者，
+     * 清理职责已由每 20 刻跑一次的 {@link #refresh(Level)} 承担（同一套判定、顺手删记录）——
+     * 那个方法已删除，相关 helper（{@code ownerLevel}）仍被 {@code refresh} 使用。
      */
-    public static void prune() {
-        Iterator<Map.Entry<UUID, Activation>> it = ACTIVE.entrySet().iterator();
-        while (it.hasNext()) {
-            Activation a = it.next().getValue();
-            Level owned = ownerLevel(a);
-            if (owned == null || owned.getGameTime() >= a.expireAt) {
-                it.remove();
-            }
-        }
-    }
-
-    /** 全清。注意：换世界**不再依赖**它（见 {@link #liveIn}），这里留给调试命令用。 */
     public static void clear() {
         ACTIVE.clear();
     }

@@ -32,7 +32,8 @@
 
 ### 1.2 图层有多少
 
-真机日志（`AfterimageRenderer:191`，本次改动前的那行）实测玩家渲染器的图层列表共 **10** 个：
+真机日志（改动前那行在 `AfterimageRenderer.java:191`，改动后在 `:193`；两份日志引用的都是同一句
+「残影图层」打印）实测玩家渲染器的图层列表共 **10** 个：
 
 ```
 HumanoidArmorLayer, PlayerItemInHandLayer, ArrowLayer, Deadmau5EarsLayer, CapeLayer,
@@ -149,7 +150,7 @@ for (RenderLayer<LivingEntityRenderState, ?> layer : layers) {
 
 **一句话**：新的过滤只写在 `AfterimageRenderer` 的残影循环内部（`AfterimageRenderer.java:203`），
 而普通实体渲染**根本不经过这个循环** —— 原版 `LivingEntityRenderer.submit` 遍历的是它自己的
-`this.layers` 字段，`accessor.cyberware$layers()` 在本文件里只被**读**过一次（`:149`）；
+`this.layers` 字段，`accessor.cyberware$layers()` 在本文件里只被**读**过一次（`AfterimageRenderer.java:151`）；
 两个 mixin 也本来就被 `AfterimageRenderer.ghostAlpha() > 0` 门控，而 `ghostAlpha` 只在
 残影循环里非零（`:175` 置值，`:214-216` 与 `:107` 两处 `finally` 归零）。
 
@@ -162,7 +163,7 @@ for (RenderLayer<LivingEntityRenderState, ?> layer : layers) {
 3. `accessor.cyberware$layers()` 是 `@Accessor`，本文件只 **get**、没有 set；
    过滤是「遍历时跳过」，不是「从列表里删掉」—— 原版那份 `layers` 字段始终是完整的 10 个。
 4. `EquipmentLayerRendererMixin`（`:60`、`:90`、`:118`、`:141`）与 `CapeLayerMixin`（`:55`）
-   的所有分支都以 `AfterimageRenderer.ghostAlpha() > 0.0F` 为前提，普通火体渲染时 `ghostAlpha == 0`
+   的所有分支都以 `AfterimageRenderer.ghostAlpha() > 0.0F` 为前提，普通本体渲染时 `ghostAlpha == 0`
    → 走原版分支，护甲渲染类型与染色**逐字节等于**没有本模组时的行为。
 
 因此：**本体的护甲、披风、手持物品、箭、蜂刺、耳朵、鹦鹉、鞘翅、头顶方块、旋转特效一个都不会少**
