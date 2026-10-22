@@ -3,11 +3,11 @@ package com.dsh.cyberware.client;
 import com.dsh.cyberware.Cyberware;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 /**
  * 斯安威斯坦 HUD —— <b>竖向</b>细进度条（冷灰）。
@@ -41,14 +41,20 @@ public final class SandevistanHud {
     private SandevistanHud() {
     }
 
-    public static void onRenderGui(RenderGuiEvent.Post event) {
+    /**
+     * Fabric HUD 入口 —— 对应 {@code HudElement} 的唯一抽象方法
+     * {@code extractRenderState(GuiGraphicsExtractor, DeltaTracker)}（本机实测，fabric-rendering-v1-23.3.1）。
+     *
+     * <p>替代原来的 NeoForge {@code RenderGuiEvent.Post}。注册（由客户端初始化器负责）：
+     * {@code HudElementRegistry.addLast(Identifier, SandevistanHud::extractRenderState)}。
+     */
+    public static void extractRenderState(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
         float progress = ClientTimeDilation.progress();
         float ratio = ClientTimeDilation.ratioNow();
-        if (ratio <= 0.01F && progress <= 0.0F) {
+        if (g == null || (ratio <= 0.01F && progress <= 0.0F)) {
             return;
         }
 
-        GuiGraphicsExtractor g = event.getGuiGraphics();
         Font font = Minecraft.getInstance().font;
         int yBottom = g.guiHeight() - BAR_BOTTOM_GAP;
 

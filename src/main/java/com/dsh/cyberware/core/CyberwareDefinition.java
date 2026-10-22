@@ -122,6 +122,24 @@ public record CyberwareDefinition(
         public static final String TIER = "tier";
         /** 击败敌人恢复生命（%） */
         public static final String KILL_HEAL = "kill_heal";
+        /**
+         * 护盾上限加成（点）。
+         *
+         * <p>玩家护盾上限 = Σ 这个键（见 {@code CyberwareStats#maxShield}）。
+         * 单位是「点」，与生命值同量纲（2 点 = 1 颗心）。
+         *
+         * <p>UI 详情里应显示成「护盾量 +40」——见 {@code CyberwareStationScreen.statLabel}。
+         */
+        public static final String SHIELD = "shield";
+        /**
+         * 护盾恢复速度加成（点/秒）。
+         *
+         * <p>实际恢复速度 = 基础值（配置 {@code shield.baseRegenPerSecond}，默认 3）+ Σ 这个键。
+         * 只在**脱战**（配置 {@code shield.combatDelayTicks}，默认 60 刻 = 3 秒）后才生效。
+         *
+         * <p>UI 详情里应显示成「护盾恢复 +1.5/s」。
+         */
+        public static final String SHIELD_REGEN = "shield_regen";
 
         private Stats() {
         }

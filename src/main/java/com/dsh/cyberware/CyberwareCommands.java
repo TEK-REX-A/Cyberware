@@ -9,11 +9,13 @@ import com.dsh.cyberware.core.RamSystem;
 import com.dsh.cyberware.core.TimeDilationManager;
 import com.dsh.cyberware.event.BerserkHandler;
 import com.mojang.brigadier.arguments.DoubleArgumentType;
+import com.mojang.brigadier.CommandDispatcher;
 import net.minecraft.commands.Commands;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.server.permissions.Permissions;
-import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /**
  * 调试命令（第二步临时用，等按键绑定做好后再决定是否保留）。
@@ -30,8 +32,10 @@ public final class CyberwareCommands {
     private CyberwareCommands() {
     }
 
-    public static void register(RegisterCommandsEvent event) {
-        event.getDispatcher().register(Commands.literal("cyberware")
+    public static void register(CommandDispatcher<CommandSourceStack> dispatcher,
+                                CommandBuildContext buildContext,
+                                Commands.CommandSelection selection) {
+        dispatcher.register(Commands.literal("cyberware")
                 // 26.x：hasPermission(int) 已废弃，改用 PermissionSet + Permissions 常量
                 .requires(source -> source.permissions().hasPermission(Permissions.COMMANDS_GAMEMASTER))
                 .then(Commands.literal("sandevistan").executes(ctx -> {

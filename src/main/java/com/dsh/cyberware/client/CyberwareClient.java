@@ -2,24 +2,27 @@ package com.dsh.cyberware.client;
 
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.client.post.SandevistanPostProcessor;
+import com.dsh.cyberware.core.Attachments;
+import com.dsh.cyberware.core.ShieldState;
+import com.dsh.cyberware.registry.ModAttachments;
 import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import com.dsh.cyberware.network.ActivatePayload;
 import com.dsh.cyberware.network.BerserkPayload;
 import com.dsh.cyberware.network.HackPayload;
+import com.dsh.cyberware.network.InstallationPayload;
 import com.dsh.cyberware.network.OverclockPayload;
 import com.dsh.cyberware.network.RamPayload;
+import com.dsh.cyberware.network.ShieldPayload;
 import com.dsh.cyberware.network.TimeDilationPayload;
 import com.dsh.cyberware.registry.ModMenus;
+import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.keymapping.v1.KeyMappingHelper;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
+import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.Level;
-import net.neoforged.bus.api.IEventBus;
-import net.neoforged.neoforge.client.event.ClientTickEvent;
-import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
-import net.neoforged.neoforge.client.event.RegisterMenuScreensEvent;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
-import net.neoforged.neoforge.client.network.event.RegisterClientPayloadHandlersEvent;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.network.event.RegisterPayloadHandlersEvent;
 
 /**
  * 客户端专用初始化。
@@ -32,84 +35,139 @@ public final class CyberwareClient {
     private CyberwareClient() {
     }
 
-    public static void init(IEventBus modEventBus) {
-        modEventBus.addListener(CyberwareClient::onRegisterMenuScreens);
-        modEventBus.addListener(CyberwareClient::onRegisterPayloads);
-        modEventBus.addListener(CyberwareClient::onRegisterClientPayloads);
-        modEventBus.addListener(CyberwareClient::onRegisterKeys);
+    /**
+     * 客户端初始化（由 {@code CyberwareClientFabric.onInitializeClient()} 调用）。
+     *
+     * <p>⚠ <b>并行迁移中间态</b>：本文件只保留“入口 + 能确定的注册”，
+     * 渲染层与网络层的注册点已移出，交给各自负责人接线（见方法内 TODO）。
+     */
+    public static void initClient() {
+        // ---- 每 tick 检查激活键 ----
+        ClientTickEvents.END_CLIENT_TICK.register(CyberwareClient::onClientTick);
 
-        // 注意：这里**不再**缩放生物动画。
-        // 服务端已经把每 tick 的位移按倍率缩回去了，客户端的移动本身就是慢的，
-        // 动画会自然跟上；再乘一次只会变成「腿不动却在平移」。
-        // 屏幕边缘效果 + 科幻进度条
-        NeoForge.EVENT_BUS.addListener(SandevistanOverlay::onRenderGui);
-        NeoForge.EVENT_BUS.addListener(SandevistanHud::onRenderGui);
-        NeoForge.EVENT_BUS.addListener(BerserkHud::onRenderGui);
-        // 脑机超频（t25）：RAM 条 + 全屏特效 + 头顶全息面板 + 生物荧光轮廓
-        NeoForge.EVENT_BUS.addListener(RamHud::onRenderGui);
-        NeoForge.EVENT_BUS.addListener(OverclockWireframe::onRenderLiving);
-        // 快速破解（t29）：折角锁定框 + 上传进度条 + 提示条
-        NeoForge.EVENT_BUS.addListener(HackHud::onRenderGui);
-        // 斯安威斯坦拖影（只对本地玩家）
-        NeoForge.EVENT_BUS.addListener(AfterimageRenderer::onRenderLiving);
-        // 投射物时间减缓：客户端这一半 —— 与服务端同相位跳 tick（见类注释）
-        NeoForge.EVENT_BUS.addListener(ClientProjectileDilation::onEntityTickPre);
-        // 屏幕后处理：边缘径向模糊（强度随激活进度淡入淡出）
-        // 后处理的执行点改由 GameRendererMixin 挂在原版那段代码后面
-        // 激活时拉大 FOV（速度感）
-        NeoForge.EVENT_BUS.addListener(SandevistanPostProcessor::onComputeFov);
-        // 每 tick 检查激活键
-        NeoForge.EVENT_BUS.addListener(CyberwareClient::onClientTick);
-    }
+        // ---- 按键绑定 ----
+        registerKeys();
 
-    private static void onRegisterMenuScreens(RegisterMenuScreensEvent event) {
-        event.register(ModMenus.CYBERWARE_STATION.get(), CyberwareStationScreen::new);
-    }
+        // ---- 菜单界面 ----
+        ScreenRegistrar.register(ModMenus.CYBERWARE_STATION.get(), CyberwareStationScreen::new);
 
-    private static void onRegisterKeys(RegisterKeyMappingsEvent event) {
-        event.registerCategory(CyberwareKeys.CATEGORY);
-        event.register(CyberwareKeys.ACTIVATE);
-        // R 键轮盘：本任务（t13）只注册键位；触发逻辑（consumeClick → 打开轮盘）留给 t14。
-        event.register(CyberwareKeys.RADIAL);
-        // X 键：短按扫描 / 长按快速破解轮盘（t29 新增，t36 改双行为）
-        event.register(CyberwareKeys.SCAN);
-        // t36：G 键已取消（契约 STEP4 §3 的键位最终形态）—— 脑机超频改成 R 轮盘里的一项，
-        // 这里不再注册任何超频键位。
+        // ---- 数据包接收（Fabric 版）----
+        // payload 类型已在 CyberwareNetwork.register() 里用 clientboundPlay 注册过，
+        // 这里只挂接收器；重复注册类型会抛 already registered，别再来一次。
+        // 全部走 ctx.client().execute(...)：receive() 在网络线程上，客户端状态只能在主线程改。
+        // ★ 义体安装表（0.5.3 真机「吞义体」的修复端）
+        // 为什么需要它：ModAttachments.INSTALLATION 没有 .syncWith(...)（Fabric 附件同步在 Android
+        // 上会因 netty 反射炸），所以服务端写进去的数据客户端根本拿不到。这里把服务端推来的权威表
+        // 写回同一个附件 —— 之后操作台界面、轮盘、被动效果读到的都是这一份，天然对齐。
+        ClientPlayNetworking.registerGlobalReceiver(InstallationPayload.TYPE,
+                (InstallationPayload payload, ClientPlayNetworking.Context ctx) ->
+                        ctx.client().execute(() -> applyInstallation(payload)));
+        // ★ 护盾（同一套做法：服务端推、客户端写回同一个附件）
+        // 后续的右下角护盾条直接读 ShieldState.of(minecraft.player)，不用再关心网络层。
+        ClientPlayNetworking.registerGlobalReceiver(ShieldPayload.TYPE,
+                (ShieldPayload payload, ClientPlayNetworking.Context ctx) ->
+                        ctx.client().execute(() -> applyShield(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(RamPayload.TYPE,
+                (RamPayload payload, ClientPlayNetworking.Context ctx) ->
+                        ctx.client().execute(() -> RamClientState.onRamPayload(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(OverclockPayload.TYPE,
+                (OverclockPayload payload, ClientPlayNetworking.Context ctx) ->
+                        ctx.client().execute(() -> RamClientState.onOverclockPayload(payload)));
+        ClientPlayNetworking.registerGlobalReceiver(HackPayload.TYPE,
+                (HackPayload payload, ClientPlayNetworking.Context ctx) ->
+                        ctx.client().execute(() -> {
+                            // 瘫痪红字（t25）与锁定/上传进度（t29）各管各的显示状态
+                            RamClientState.onHackPayload(payload);
+                            HackClientState.onHackPayload(payload);
+                        }));
+        ClientPlayNetworking.registerGlobalReceiver(TimeDilationPayload.TYPE,
+                (TimeDilationPayload payload, ClientPlayNetworking.Context ctx) ->
+                        ctx.client().execute(() -> ClientTimeDilation.applyOnClient(
+                                payload.durationTicks(), payload.ratio(),
+                                payload.x(), payload.y(), payload.z(), payload.radius(), payload.owner())));
+        ClientPlayNetworking.registerGlobalReceiver(BerserkPayload.TYPE,
+                (BerserkPayload payload, ClientPlayNetworking.Context ctx) ->
+                        ctx.client().execute(() -> BerserkClientState.onPayload(
+                                payload.remainingTicks(), payload.totalTicks(),
+                                payload.damageMultiplier(), payload.active())));
+
+        // ---- HUD（fabric-rendering-v1 的 hud 层，替代原 5 处 RenderGuiEvent.Post）----
+        // 每个 HUD 用独立 id，按叠加顺序注册：先底层特效、再状态条、最后提示框。
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "sandevistan_overlay"),
+                SandevistanOverlay::extractRenderState);
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "sandevistan_hud"),
+                SandevistanHud::extractRenderState);
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "berserk_hud"),
+                BerserkHud::extractRenderState);
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "ram_hud"),
+                RamHud::extractRenderState);
+        HudElementRegistry.addLast(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "hack_hud"),
+                HackHud::extractRenderState);
+
+        // 仍未接线（不属本次改动）：ComputeFovModifierEvent（SandevistanPostProcessor.onComputeFov）。
+        // 投射物跳 tick 由 mixin/client/ClientEntityTickMixin 接管；
+        // 生物轮廓/拖影由 mixin/client/LivingEntityRendererMixin 接管（该文件尚待接线）。
     }
 
     /**
-     * <b>客户端包处理（t25 P0 第一件事）</b> —— 契约 §3.4 点名的交接点。
+     * 把服务端同步下来的权威安装表写回本机玩家实体上的附件。
      *
-     * <p>三个包在 {@code CyberwareNetwork} 里只有服务端 handler（{@code RamPayload} 用的是
-     * 无 handler 的 {@code playToClient}）—— 不在这里补客户端 handler，客户端收到包会报
-     * 「没有 handler」。所有处理都只是<b>更新显示状态</b>，绝不改玩法数据。
+     * <p>整个方法包 try/catch：这里是网络回调，抛异常会直接把客户端带崩。
+     * 写失败也不致命 —— 服务端每 2 秒兜底重推一次（见 {@code CyberwareNetwork#onLevelTickEnd}）。
      */
-    private static void onRegisterClientPayloads(RegisterClientPayloadHandlersEvent event) {
-        event.register(RamPayload.TYPE,
-                (payload, context) -> context.enqueueWork(() -> RamClientState.onRamPayload(payload)));
-        event.register(OverclockPayload.TYPE,
-                (payload, context) -> context.enqueueWork(() -> RamClientState.onOverclockPayload(payload)));
-        event.register(HackPayload.TYPE,
-                (payload, context) -> context.enqueueWork(() -> {
-                    // t25 的瘫痪红字 + t29 的锁定/上传进度，各处管各处的显示状态
-                    RamClientState.onHackPayload(payload);
-                    HackClientState.onHackPayload(payload);
-                }));
+    private static void applyInstallation(InstallationPayload payload) {
+        try {
+            if (payload == null) {
+                return;
+            }
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft == null || minecraft.player == null) {
+                // 玩家实体还没建好（进服 / 重生的那一瞬）：等下一次同步
+                return;
+            }
+            var type = ModAttachments.INSTALLATION.get();
+            if (type == null) {
+                return;
+            }
+            Attachments.set(Attachments.of(minecraft.player), type, payload.installation());
+        } catch (Throwable t) {
+            Cyberware.LOGGER.warn("[cyberware] 安装表同步写入失败（已忽略，等待服务端重推）", t);
+        }
     }
 
-    private static void onRegisterPayloads(RegisterPayloadHandlersEvent event) {
-        event.registrar("1").playToClient(
-                TimeDilationPayload.TYPE,
-                TimeDilationPayload.STREAM_CODEC,
-                (payload, context) -> context.enqueueWork(() -> ClientTimeDilation.applyOnClient(
-                        payload.durationTicks(), payload.ratio(),
-                        payload.x(), payload.y(), payload.z(), payload.radius(), payload.owner())));
-        event.registrar("1").playToClient(
-                BerserkPayload.TYPE,
-                BerserkPayload.STREAM_CODEC,
-                (payload, context) -> context.enqueueWork(() -> BerserkClientState.onPayload(
-                        payload.remainingTicks(), payload.totalTicks(),
-                        payload.damageMultiplier(), payload.active())));
+    /**
+     * 把服务端同步下来的护盾快照写回本机玩家实体上的附件。
+     *
+     * <p>同 {@link #applyInstallation}：包了 try/catch，写失败由服务端的低频重推兜底。
+     */
+    private static void applyShield(ShieldPayload payload) {
+        try {
+            if (payload == null) {
+                return;
+            }
+            Minecraft minecraft = Minecraft.getInstance();
+            if (minecraft == null || minecraft.player == null) {
+                return;
+            }
+            var type = ModAttachments.SHIELD.get();
+            if (type == null) {
+                return;
+            }
+            Attachments.set(Attachments.of(minecraft.player), type, payload.toState());
+        } catch (Throwable t) {
+            Cyberware.LOGGER.warn("[cyberware] 护盾同步写入失败（已忽略，等待服务端重推）", t);
+        }
+    }
+
+    private static void registerKeys() {
+        KeyMappingHelper.registerKeyMapping(CyberwareKeys.ACTIVATE);
+        KeyMappingHelper.registerKeyMapping(CyberwareKeys.RADIAL);
+        KeyMappingHelper.registerKeyMapping(CyberwareKeys.SCAN);
     }
 
     /**
@@ -153,7 +211,7 @@ public final class CyberwareClient {
         try {
             Minecraft minecraft = Minecraft.getInstance();
             var window = minecraft.getWindow();
-            int key = CyberwareKeys.SCAN.getKey().getValue();
+            int key = KeyMappingKeys.getValue(CyberwareKeys.SCAN);
             // 清掉 KeyMapping 的 click 计数：这套状态机看物理键，click 留着只会堆积
             while (CyberwareKeys.SCAN.consumeClick()) {
                 // 只为清计数
@@ -167,7 +225,11 @@ public final class CyberwareClient {
                 scanWheelOpened = false;
             } else if (down && scanHeld && !scanWheelOpened && now - scanPressMs >= SCAN_HOLD_MS) {
                 scanWheelOpened = true;
-                if (HackClientState.hasLock()) {
+                if (!HackClientState.hasOptics()) {
+                    // 锁定框已被义眼前置挡住（hasLock() 恒 false），此时再报 NO_TARGET 会误导：
+                    // 真正缺的是义眼，不是目标。
+                    HackClientState.showNote("NO_KIROSHI");
+                } else if (HackClientState.hasLock()) {
                     HackRadialScreen.openIfLocked(minecraft);
                 } else {
                     HackClientState.showNote("NO_TARGET");
@@ -175,7 +237,7 @@ public final class CyberwareClient {
             } else if (!down && scanHeld) {
                 scanHeld = false;
                 if (!scanWheelOpened) {
-                    ClientPacketDistributor.sendToServer(HackPayload.scan());
+                    ClientPlayNetworking.send(HackPayload.scan());
                 }
             }
         } catch (Throwable t) {
@@ -186,10 +248,10 @@ public final class CyberwareClient {
     }
 
     /** 按键触发 → 发一句请求给服务端（服务端才是有权改数据的一方）。 */
-    private static void onClientTick(ClientTickEvent.Post event) {
+    private static void onClientTick(Minecraft client) {
         while (CyberwareKeys.ACTIVATE.consumeClick()) {
             // V 键 = 手持激活：defId 用 HELD（空串），服务端行为与以前完全一致
-            ClientPacketDistributor.sendToServer(new ActivatePayload(ActivatePayload.HELD));
+            ClientPlayNetworking.send(new ActivatePayload(ActivatePayload.HELD));
         }
         // R 键 = 义体轮盘（t36 起还有「脑机超频」一项，契约 STEP4 §3）。
         // 注意：t36 取消了「有锁定目标 → 破解轮盘」的上下文切换 ——

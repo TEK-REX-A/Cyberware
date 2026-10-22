@@ -300,13 +300,37 @@ public final class TimeDilationManager {
         ACTIVE.clear();
     }
 
+    // ------------------------------------------------------------------
+    // 广播钩子 —— 让 core 层对 loader 零依赖
+    // ------------------------------------------------------------------
+
+    /**
+     * 发包钩子：把「发给同维度所有玩家」这个动作从 core 抽出去。
+     *
+     * <p><b>为什么必须抽</b>：这里原来直接写死 NeoForge 的 PacketDistributor，
+     * 而 26.1.2 Fabric 环境里没有那个包 —— core 只要留那一行，整个 core 在
+     * Fabric 侧就编译不过（连带共用段 mixin 一起炸）。
+     *
+     * <p><b>默认实现是 no-op</b>：真实现由网络层在初始化时通过 {@link #setSyncHook}
+     * 注入（CyberwareNetwork#register → ServerPlayNetworking.send 逐玩家发送）。
+     * 原先那段反射调 NeoForge PacketDistributor 的临时实现已删除。
+     */
+    public interface SyncHook {
+        void sendToPlayersInDimension(Level level,
+                                      com.dsh.cyberware.network.TimeDilationPayload payload);
+    }
+
+    private static SyncHook syncHook = (level, payload) -> { };
+
+    /** 注入真实现（Fabric 侧由网络层在初始化时调用）；传 null 表示停用广播。 */
+    public static void setSyncHook(SyncHook hook) {
+        syncHook = hook == null ? (level, payload) -> { } : hook;
+    }
+
     /** 广播给同维度所有玩家：带上区域中心、半径与施法者，客户端才能精确判断谁该慢。 */
     private static void broadcast(Level level, Activation a, int durationTicks) {
-        if (level instanceof net.minecraft.server.level.ServerLevel serverLevel) {
-            net.neoforged.neoforge.network.PacketDistributor.sendToPlayersInDimension(
-                    serverLevel,
-                    new com.dsh.cyberware.network.TimeDilationPayload(
-                            durationTicks, (float) a.ratio, a.x, a.y, a.z, (float) a.radius, a.owner));
-        }
+        syncHook.sendToPlayersInDimension(level,
+                new com.dsh.cyberware.network.TimeDilationPayload(
+                        durationTicks, (float) a.ratio, a.x, a.y, a.z, (float) a.radius, a.owner));
     }
 }

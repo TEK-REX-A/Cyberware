@@ -11,8 +11,13 @@ import com.dsh.cyberware.menu.CyberwareStationMenu;
 import com.dsh.cyberware.menu.CyberwareStationService;
 import com.dsh.cyberware.network.CyberwareActionPayload;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
+import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonEvent;
@@ -24,97 +29,158 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
 
 /**
- * 义体操作台界面。
+ * 义体操作台（安装界面），按设计稿 {@code 无标题-2026-10-22-0001.png} 重做。
  *
- * <p>左侧分类树（可展开、可滚动），右侧型号详情。型号行用**自己的物品图标**，
- * 稀有度直接体现在名称颜色上；分类行用 10 个槽位的分类图标。
+ * <h3>三栏结构</h3>
+ * <ol>
+ *   <li><b>左栏 = 人体部位图</b>（{@link StationBodyMap}）：十个固定部位，点部位只切换右侧信息，
+ *       <b>不直接执行安装</b>；</li>
+ *   <li><b>中栏 = 可选安装列表</b>：每条「名称 / 描述 / 容量数字」，下面是按实际数量生成的
+ *       「已安装」格，最下面一条容量条；</li>
+ *   <li><b>右栏 = 已选中义体的详情</b>：名称、英文名、加成及效果。<b>底部是故意留白的占位结构</b>，
+ *       只画一个极淡的框，别往里塞东西 —— 后面的功能要占这位。</li>
+ * </ol>
  *
- * <p>26.x 绘制入口是 {@link GuiGraphicsExtractor}（{@code GuiGraphics} 已移除），
- * 鼠标回调签名是 {@link MouseButtonEvent}。
+ * <h3>交互（主人定的规矩）</h3>
+ * <ul>
+ *   <li><b>点击选中，再点取消</b>；hover 只做 PC 端的额外高亮，不承担任何功能
+ *       （触屏没有自然悬停）；</li>
+ *   <li>点空白取消选中；</li>
+ *   <li><b>安装按钮靠状态控制，不靠位置</b>：未选中 / 容量不足 / 背包里没有这件义体 → 置灰且点了也不发请求；</li>
+ *   <li><b>退出用 ESC</b>（MC Screen 默认行为），右上角只放一个 11px 的小 × 和一行 ESC 提示，
+ *       不摆大按钮跟安装抢镜；</li>
+ *   <li>「需要 X 义体容量」这句话<b>全屏只出现一次</b> —— 在容量条下面写成 {@code +X / 剩余 Y}，
+ *       列表里只留一个容量数字。</li>
+ * </ul>
  *
- * <h3>安装 / 卸载交互（0.3.12 补上）</h3>
- * <p>详情面板底部有「安装 / 卸载」两个按钮，它们只做两件事：<b>预检 + 发请求</b>。
- * 请求走既有通道 {@link CyberwareActionPayload}（{@code ClientPacketDistributor.sendToServer}），
- * 服务端 {@link CyberwareStationService} 才是唯一有权改数据的一方 —— 客户端永远不自己写
- * 玩家数据，失败原因也由服务端回执兜底（本地预检用的是**服务端同一份** {@code validateInstall}）。
+ * <h3>26.x API 说明</h3>
+ * <p>绘制入口是 {@link GuiGraphicsExtractor}（{@code GuiGraphics} 已移除），鼠标回调是
+ * {@link MouseButtonEvent}。本文件用到的每个方法（{@code fill / text / blit}、父类
+ * {@code isHovering}、{@code font.width / plainSubstrByWidth}）都能在本工程其它 client 文件里
+ * 找到同款调用，没有凭记忆写的签名。
+ * <p>{@code extractBackground} 收到的是<b>屏幕绝对坐标</b>；{@code extractLabels} 收到的是
+ * <b>面板相对坐标</b>（父类已 translate）。鼠标坐标永远是绝对坐标，所以 hover 一律走
+ * {@code this.isHovering(相对坐标...)}，点击判定一律用 {@code leftPos/topPos + 相对坐标}。
  */
 public class CyberwareStationScreen extends AbstractContainerScreen<CyberwareStationMenu> {
 
-    private static final int PANEL_W = 320;
+    // ---- 面板 ----
+    private static final int PANEL_W = 360;
     private static final int PANEL_H = 226;
 
-    // ---- 配色：现代深色主题（中性灰阶 + 单一柔和蓝强调色，去掉霓虹） ----
-    private static final int BG = 0xF00E1014;
-    private static final int CARD = 0xFF171A20;
-    private static final int CARD_DEEP = 0xFF12151A;
-    private static final int BORDER = 0xFF2A2F38;
-    private static final int ACCENT = 0xFF6E9BFF;
-    private static final int TEXT = 0xFFE8EBF0;
-    private static final int DIM = 0xFF98A0AC;
-    private static final int HOVER_BG = 0x14FFFFFF;
-    private static final int SEL_BG = 0xFF243044;
-    private static final int WARN = 0xFFFF8A80;
-    // ---- 布局 ----
-    private static final int ROW_H = 14;
-    private static final int TREE_X = 4;
-    private static final int TREE_W = 150;
-    private static final int TREE_TOP = 20;
-    private static final int TREE_BOTTOM = PANEL_H - 52;
-    private static final int DETAIL_X = 160;
-    /** 底部义体槽条的位置（与 CyberwareStationMenu 的槽位坐标一致）。 */
-    private static final int SLOT_STRIP_TOP = PANEL_H - 46;
+    // ---- 左栏：人体部位图 ----
+    private static final int LEFT_X = 4;
+    private static final int LEFT_W = 76;
+    private static final int BODY_X = 14;
+    private static final int BODY_Y = 40;
 
-    // ---- 详情面板底部的操作按钮 ----
-    private static final int BTN_Y = TREE_BOTTOM - 16;
-    private static final int BTN_W = 74;
-    private static final int BTN_H = 14;
-    private static final int BTN_INSTALL_X = DETAIL_X;
-    private static final int BTN_UNINSTALL_X = DETAIL_X + 80;
-    /** 状态提示在标题栏停留的时长（毫秒）。 */
-    private static final long STATUS_MILLIS = 4000L;
+    // ---- 中栏：可选安装 / 已安装 / 容量条 ----
+    private static final int MID_X = 86;
+    private static final int MID_W = 170;
+    private static final int LIST_TOP = 38;
+    private static final int LIST_BOTTOM = 90;
+    private static final int CARD_H = 24;
+    private static final int CARD_GAP = 4;
+    private static final int INST_TOP = 108;
+    private static final int INST_CELL_W = 30;
+    private static final int INST_CELL_H = 20;
+    private static final int INST_GAP = 4;
+    private static final int INST_COLS = 5;
+    private static final int INST_ROWS = 2;
+    private static final int CAP_BAR_Y = 156;
+    private static final int CAP_BAR_H = 8;
+    private static final int CAP_TEXT_Y = 166;
+
+    // ---- 右栏：详情 ----
+    private static final int DETAIL_X = 262;
+    private static final int DETAIL_W = 94;
+
+    // ---- 底部：快捷栏 + 安装按钮 ----
+    private static final int BTN_X = 284;
+    private static final int BTN_Y = 196;
+    private static final int BTN_W = 72;
+    private static final int BTN_H = 16;
+    /** 右上角退出提示（小 ×，11px，不跟安装按钮抢位置）。 */
+    private static final int CLOSE_X = PANEL_W - 18;
+    private static final int CLOSE_Y = 7;
+    private static final int CLOSE_S = 11;
 
     /**
-     * 底部第二行：玩家快捷栏（9 格）。
+     * 底部的玩家快捷栏（纯显示方便确认手边有什么）。
      *
-     * <p>{@link CyberwareStationMenu} 把玩家背包整体放在 {@code (-3000, -3000)}（界面里不画），
-     * 但那样玩家**根本没法把义体放进操作台槽位** —— 操作台槽是唯一能装东西的地方，
-     * 见 {@code CyberwareStationService#install}。槽位坐标纯客户端用途（服务端只认槽位下标、
-     * 不认坐标），所以这里把最后 9 个槽（快捷栏）挪到面板底部，玩家就能用原版点击
-     * 把快捷栏里的义体放进义体槽，再点「安装」。
+     * <p><b>v0.5.4 起它不再承担「送料」职责</b>：安装直接读 {@code player.getInventory()}，
+     * 服务端 {@code CyberwareStationService#install(containerId, defId)} 自己去找并扣 1 件。
+     * 但菜单把整个背包挪到 {@code (-3000,-3000)} 不显示 —— 快捷栏仍然是玩家唯一能看见、
+     * 能拖放的格子，所以照样捞到底部。{@code Slot.x/y} 在 26.x 是 final，所以这里是换成
+     * 同 container、同 index、只是坐标不同的新 Slot（对服务端完全透明）。
      */
     private static final int HOTBAR_X = 70;
     private static final int HOTBAR_Y = 204;
     private static final int HOTBAR_SLOTS = 9;
 
-    /** 当前展开的分类（同时只展开一个）。 */
-    private CyberwareSlot expandedSlot = CyberwareSlot.OPERATING_SYSTEM;
+    private static final long STATUS_MILLIS = 4000L;
+
+    /** 左下角版本号（真正取值见 {@link #modVersion()}）。 */
+    private static final String MOD_VERSION = modVersion();
+
     /**
-     * 右侧正在展示的型号。
+     * 从 <b>fabric.mod.json</b> 拿本 mod 的 version（构建时 processResources 把里面的版本占位符
+     * 填成 0.5.3-Beta），拼成 {@code v0.5.3-Beta} 给左下角显示。
      *
-     * <p>0.3.12：旧占位定义 {@code SANDEVISTAN_ZETATECH} 已随官方 123 条定义表重写删除，
-     * 默认展示它的后继型号 C4（captain 授权的范围外修正）。
+     * <p>{@link FabricLoader} 在本工程 {@code CyberwareConfig} 里已经在用（取 config 目录），
+     * 所以不是凭记忆编的 API；{@code getModContainer} 返回 {@code Optional<ModContainer>}，
+     * {@code ModMetadata.getVersion()} 返回 {@code Version}，{@code getFriendlyString()} 给原始字符串。
+     * 整段包 try/catch：版本号是装饰，绝不能因为读不到它让界面初始化失败。
      */
-    private CyberwareDefinition selectedDef = CyberwareDefinitions.SANDEVISTAN_C4;
-    /** 分类树命中区，每帧重建，供点击检测。 */
-    private final List<HitRow> treeRows = new ArrayList<>();
+    private static String modVersion() {
+        try {
+            return "v" + FabricLoader.getInstance().getModContainer(Cyberware.MODID)
+                    .map(container -> container.getMetadata().getVersion().getFriendlyString())
+                    .orElse("?");
+        } catch (Throwable ignored) {
+            return "v?";
+        }
+    }
 
-    /** 分类树滚动偏移（像素）。 */
-    private int scroll = 0;
-    /** 是否正在拖动列表（触屏用） */
-    private boolean draggingTree;
-    private double lastDragY;
-    /** 每帧算出的内容总高度，用于夹紧滚动。 */
-    private int contentHeight = 0;
+    // ------------------------------------------------------------------
+    // 状态
+    // ------------------------------------------------------------------
 
-    /** 标题栏的短提示（本地预检结果 / 已发请求），过 {@link #STATUS_MILLIS} 后自动隐去。 */
+    /** 当前选中的部位（决定中栏列表与右栏）。 */
+    private CyberwareSlot selectedPart = CyberwareSlot.OPERATING_SYSTEM;
+    /** 当前选中的义体；null = 没选中。 */
+    private CyberwareDefinition selectedDef;
+    /** 选中的那件是不是「身上已装的」（是的话底部按钮变成卸载）。 */
+    private boolean selectedInstalled;
+
+    /** 中栏列表滚动偏移（像素）。 */
+    private int listScroll;
+    /** 列表按下起点，用于区分「点选」和「拖动滚动」（触屏没有滚轮）。 */
+    private boolean draggingList;
+    /** 上一次鼠标 y（算拖动增量用，会跟着更新）。 */
+    private double pressY;
+    /** 按下那一刻的 y（<b>不更新</b>，松开时用它判断这是点选还是拖动）。 */
+    private double dragStartY;
+    private CyberwareDefinition pressCard;
+    /** 每帧重建的命中区（屏幕绝对坐标）。 */
+    private final List<HitCard> listCards = new ArrayList<>();
+    private final List<HitCell> installedCells = new ArrayList<>();
+
+    /** 当前部位的可选列表缓存（切部位才重建，避免每帧遍历 123 条定义）。 */
+    private CyberwareSlot cachedPart;
+    private List<CyberwareDefinition> cachedList = List.of();
+
+    /** 标题栏短提示（本地预检结果 / 已发请求）。 */
     private String status = "";
     private boolean statusError;
     private long statusAt;
 
-    private record HitRow(int x, int y, int w, int h, CyberwareSlot slot, CyberwareDefinition def) {
+    private record HitCard(int x, int y, int w, int h, CyberwareDefinition def) {
+    }
+
+    private record HitCell(int x, int y, int w, int h, String defId) {
     }
 
     public CyberwareStationScreen(CyberwareStationMenu menu, Inventory playerInventory, Component title) {
@@ -123,23 +189,10 @@ public class CyberwareStationScreen extends AbstractContainerScreen<CyberwareSta
         this.revealHotbar();
     }
 
-    /**
-     * 把玩家快捷栏那 9 格移到面板底部（只动客户端这份菜单）。
-     *
-     * <p>26.x 的 {@code Slot.x / Slot.y} 是 {@code final}，改不了坐标，所以这里是**换一个
-     * 同 container、同 container 内下标、只是坐标不同**的新 {@link Slot} 顶替它：
-     * <ul>
-     *   <li>槽位在 {@code menu.slots} 里的**位置不变**（{@code index} 手动照抄），
-     *       所以网络包里的槽位下标与两端完全一致；</li>
-     *   <li>{@code container} 与 {@code getContainerSlot()} 不变 → 服务端与本地的读写
-     *       还是同一格（服务端根本不知道坐标，它只认下标）。</li>
-     * </ul>
-     * 目的只有一个：让玩家能在界面里把快捷栏的义体点进义体槽 —— 否则义体槽永远空着，
-     * 「安装」按钮永远点不动。
-     */
+    /** 把玩家快捷栏那 9 格挪到面板底部（只动客户端这份菜单，见字段注释）。 */
     private void revealHotbar() {
         int first = this.menu.slots.size() - HOTBAR_SLOTS;
-        if (first < CyberwareStationMenu.IMPLANT_SLOT_COUNT) {
+        if (first < 0) {
             return;
         }
         for (int i = 0; i < HOTBAR_SLOTS; i++) {
@@ -151,9 +204,9 @@ public class CyberwareStationScreen extends AbstractContainerScreen<CyberwareSta
         }
     }
 
-    // ------------------------------------------------------------------
-    // 背景
-    // ------------------------------------------------------------------
+    // ==================================================================
+    // 背景（屏幕绝对坐标）
+    // ==================================================================
 
     @Override
     public void extractBackground(GuiGraphicsExtractor g, int mouseX, int mouseY, float partialTick) {
@@ -161,185 +214,505 @@ public class CyberwareStationScreen extends AbstractContainerScreen<CyberwareSta
         int x = this.leftPos;
         int y = this.topPos;
 
-        // 面板底 + 1px 柔和边框
-        g.fill(x, y, x + PANEL_W, y + PANEL_H, BG);
-        g.fill(x, y, x + PANEL_W, y + 1, BORDER);
-        g.fill(x, y + PANEL_H - 1, x + PANEL_W, y + PANEL_H, BORDER);
-        g.fill(x, y, x + 1, y + PANEL_H, BORDER);
-        g.fill(x + PANEL_W - 1, y, x + PANEL_W, y + PANEL_H, BORDER);
-        // 顶部 2px 强调条（现代 UI 的常见做法，代替发光边框）
-        g.fill(x + 1, y + 1, x + PANEL_W - 1, y + 3, ACCENT);
-        // 标题栏卡片 + 分隔线
-        g.fill(x + 1, y + 3, x + PANEL_W - 1, y + 18, CARD);
-        g.fill(x + 1, y + 18, x + PANEL_W - 1, y + 19, BORDER);
-        // 两栏卡片
-        g.fill(x + TREE_X, y + TREE_TOP - 3, x + TREE_X + TREE_W, y + TREE_BOTTOM, CARD_DEEP);
-        g.fill(x + DETAIL_X - 8, y + TREE_TOP - 3, x + PANEL_W - 6, y + TREE_BOTTOM, CARD_DEEP);
-        // 底部义体槽条
-        g.fill(x + TREE_X, y + SLOT_STRIP_TOP - 5, x + PANEL_W - 6, y + SLOT_STRIP_TOP - 4, BORDER);
-        // 十个体位槽画上底图（原版只在悬停时才画，这里做成常驻，界面才不空）
-        int slotCount = Math.min(CyberwareStationMenu.IMPLANT_SLOT_COUNT, this.menu.slots.size());
-        for (int i = 0; i < slotCount; i++) {
-            drawSlotFrame(g, this.menu.slots.get(i), x, y);
-        }
-        // 底部第二行：玩家快捷栏（坐标在 revealHotbar() 里挪进来的）
-        g.fill(x + TREE_X, y + HOTBAR_Y - 2, x + PANEL_W - 6, y + HOTBAR_Y - 1, BORDER);
-        int firstHotbar = this.menu.slots.size() - HOTBAR_SLOTS;
-        for (int i = 0; i < HOTBAR_SLOTS && firstHotbar + i >= 0; i++) {
-            drawSlotFrame(g, this.menu.slots.get(firstHotbar + i), x, y);
+        StationPaint.panel(g, x, y, PANEL_W, PANEL_H);
+
+        // 顶部 1px 亮线（立体感，代替粗边框）
+        g.fill(x + 1, y + 1, x + PANEL_W - 1, y + 2, StationPaint.withAlpha(StationPaint.ACCENT_CYAN, 0.30F));
+        // 标题栏底 + 1px 分隔（规范 3.1：用层次代替线条，所以只有这一条）
+        g.fill(x + 1, y + 22, x + PANEL_W - 1, y + 23, StationPaint.withAlpha(StationPaint.LINE, 0.8F));
+
+        // 三栏底板（卡片色，圆角 2）
+        StationPaint.roundRect(g, x + LEFT_X, y + 24, LEFT_W, 152, StationPaint.RADIUS_CARD, StationPaint.BG_CARD);
+        StationPaint.roundRect(g, x + MID_X, y + 24, MID_W, 152, StationPaint.RADIUS_CARD, StationPaint.BG_CARD);
+        StationPaint.roundRect(g, x + DETAIL_X, y + 24, DETAIL_W, 152, StationPaint.RADIUS_CARD,
+                StationPaint.BG_CARD);
+
+        // 只剩快捷栏：常驻底框，否则界面下半部空得像坏掉（送料槽已删，见类注释）
+        for (int i = 0; i < HOTBAR_SLOTS; i++) {
+            int index = hotbarSlotIndex(i);
+            if (index >= 0) {
+                drawSlotFrame(g, this.menu.slots.get(index), x, y);
+            }
         }
     }
 
-    /** 给一个菜单槽画常驻底框（原版只在悬停时画高亮，这里补上静态边框）。 */
+    /** 槽位常驻底框（原版只在悬停时才画高亮）。 */
     private static void drawSlotFrame(GuiGraphicsExtractor g, Slot slot, int x, int y) {
         int sx = x + slot.x;
         int sy = y + slot.y;
-        g.fill(sx - 1, sy - 1, sx + 17, sy + 17, CARD_DEEP);
-        g.fill(sx - 1, sy - 1, sx + 17, sy, BORDER);
-        g.fill(sx - 1, sy + 16, sx + 17, sy + 17, BORDER);
-        g.fill(sx - 1, sy - 1, sx, sy + 17, BORDER);
-        g.fill(sx + 16, sy - 1, sx + 17, sy + 17, BORDER);
+        StationPaint.roundRect(g, sx - 1, sy - 1, 18, 18, StationPaint.RADIUS_CARD, StationPaint.BG_DEEP);
+        StationPaint.outline(g, sx - 1, sy - 1, 18, 18, StationPaint.withAlpha(StationPaint.LINE, 0.8F));
     }
+
+    // ==================================================================
+    // 内容（面板相对坐标）
+    // ==================================================================
 
     @Override
     protected void extractLabels(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        // ⚠ 这里已经是「相对面板」坐标系：AbstractContainerScreen 在调用本方法前
-        //   做过 pose().translate(leftPos, topPos)。再手动加一次偏移，整个界面就会
-        //   右下方向错位 (leftPos, topPos) —— 之前的「错位 BUG」就是这个。
-        //
-        //   ⚠⚠ 但**鼠标坐标没有跟着平移**：extractContents 传进来的 mouseX/mouseY 是屏幕绝对坐标
-        //   （26.x 源码：translate 之后直接 extractLabels(graphics, mouseX, mouseY)）。
-        //   所以所有 hover 判定必须用 this.isHovering(...)（父类会自己减 leftPos/topPos），
-        //   不能用自制的 isInside(mouseX, mouseY, 面板坐标...)。
-        final int x = 0;
-        final int y = 0;
-
-        // 标题
-        g.text(this.font, Component.literal("植入体"), x + 8, y + 7, ACCENT);
-        g.text(this.font, Component.literal("CYBERWARE"), x + 52, y + 8, DIM);
-        drawHeaderRight(g, x, y);
-
-        this.treeRows.clear();
-        drawTree(g, x + TREE_X, y + TREE_TOP, mouseX, mouseY);
-        drawDetail(g, x + DETAIL_X, y + TREE_TOP + 2);
-        drawSelectedImplantFrame(g);
-        // 按钮最后画 —— 详情内容再长也不会盖住它们
-        drawActionButtons(g, mouseX, mouseY);
+        drawHeader(g, mouseX, mouseY);
+        drawBodyColumn(g, mouseX, mouseY);
+        drawListColumn(g, mouseX, mouseY);
+        drawDetailColumn(g, mouseX, mouseY);
+        drawBottom(g, mouseX, mouseY);
     }
 
-    /**
-     * 标题栏右侧：常驻「容量 已用/上限」；有提示时提示优先显示在容量左边。
-     *
-     * <p>容量读的是同步到客户端的义体表（与效果系统同一份 {@link CyberwareInstallation} API）。
-     */
-    private void drawHeaderRight(GuiGraphicsExtractor g, int x, int y) {
-        int limit = CyberwareInstallation.capacityLimit();
-        String cap = "容量 " + CyberwareInstallation.usedCapacity(this.minecraft.player) + "/"
-                + (limit == Integer.MAX_VALUE ? "∞" : String.valueOf(limit));
-        int capW = this.font.width(cap);
-        g.text(this.font, Component.literal(cap), x + PANEL_W - 8 - capW, y + 5, TEXT);
+    // ---- 标题栏 -------------------------------------------------------
 
-        int right = x + PANEL_W - 12 - capW;
-        if (this.statusActive()) {
-            String text = this.font.plainSubstrByWidth(this.status, Math.max(40, right - 112));
-            g.text(this.font, Component.literal(text), right - this.font.width(text), y + 5,
-                    this.statusError ? WARN : ACCENT);
-            return;
+    private void drawHeader(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        StationPaint.groupBar(g, 4, 4, 12);
+        String title = "义体操作台";
+        g.text(this.font, Component.literal(title), 10, 6, StationPaint.TEXT_PRIMARY);
+        int subX = 10 + this.font.width(title) + StationPaint.GAP_S;
+        g.text(this.font, Component.literal("CYBERWARE"), subX, 8, StationPaint.TEXT_SECONDARY);
+
+        // 右上：ESC 提示 + 小 ×（不摆大按钮跟安装抢镜）
+        g.text(this.font, Component.literal("ESC"), CLOSE_X - 24, 9, StationPaint.TEXT_DISABLED);
+        boolean closeHover = this.isHovering(CLOSE_X, CLOSE_Y, CLOSE_S, CLOSE_S, mouseX, mouseY);
+        if (closeHover) {
+            StationPaint.roundRect(g, CLOSE_X, CLOSE_Y, CLOSE_S, CLOSE_S, StationPaint.RADIUS_CARD,
+                    StationPaint.BG_HOVER);
         }
-        // 没有提示时维持原样：显示当前展开的分类名
-        String cat = this.expandedSlot == null ? "" : this.expandedSlot.displayName();
-        g.text(this.font, Component.literal(cat), x + PANEL_W - 8 - this.font.width(cat), y + 5, TEXT);
-    }
-
-    // ------------------------------------------------------------------
-    // 安装 / 卸载（客户端只发请求，服务端裁决）
-    // ------------------------------------------------------------------
-
-    /** 画详情面板底部的两个按钮（可用性由本地同步数据预判，灰掉时不可点）。 */
-    private void drawActionButtons(GuiGraphicsExtractor g, int mouseX, int mouseY) {
-        drawButton(g, BTN_INSTALL_X, "安装", installSourceSlot() >= 0, mouseX, mouseY);
-        drawButton(g, BTN_UNINSTALL_X, "卸载", isSelectedInstalled(), mouseX, mouseY);
-    }
-
-    private void drawButton(GuiGraphicsExtractor g, int bx, String label, boolean enabled,
-                            int mouseX, int mouseY) {
-        boolean hovered = enabled && this.isHovering(bx, BTN_Y, BTN_W, BTN_H, mouseX, mouseY);
-        int bg = !enabled ? CARD_DEEP : (hovered ? SEL_BG : CARD);
-        int border = enabled ? ACCENT : BORDER;
-        int fg = !enabled ? DIM : (hovered ? ACCENT : TEXT);
-        g.fill(bx, BTN_Y, bx + BTN_W, BTN_Y + BTN_H, bg);
-        g.fill(bx, BTN_Y, bx + BTN_W, BTN_Y + 1, border);
-        g.fill(bx, BTN_Y + BTN_H - 1, bx + BTN_W, BTN_Y + BTN_H, border);
-        g.fill(bx, BTN_Y, bx + 1, BTN_Y + BTN_H, border);
-        g.fill(bx + BTN_W - 1, BTN_Y, bx + BTN_W, BTN_Y + BTN_H, border);
-        g.text(this.font, Component.literal(label), bx + (BTN_W - this.font.width(label)) / 2,
-                BTN_Y + 3, fg);
-    }
-
-    /**
-     * 找到「装着当前选中型号」的操作台槽位下标；没有返回 -1。
-     *
-     * <p>读的是客户端这份菜单的容器 —— 内容由服务端同步下来，所以和服务端看到的一致。
-     */
-    private int installSourceSlot() {
-        CyberwareDefinition def = this.selectedDef;
-        if (def == null) {
-            return -1;
+        int c = closeHover ? StationPaint.TEXT_PRIMARY : StationPaint.TEXT_SECONDARY;
+        // 斜十字：两段阶梯 fill，够用且不需要新 API
+        for (int i = 2; i < CLOSE_S - 2; i++) {
+            g.fill(CLOSE_X + i, CLOSE_Y + i, CLOSE_X + i + 1, CLOSE_Y + i + 1, c);
+            g.fill(CLOSE_X + CLOSE_S - 1 - i, CLOSE_Y + i, CLOSE_X + CLOSE_S - i, CLOSE_Y + i + 1, c);
         }
-        var container = this.menu.getImplantContainer();
-        for (int i = 0; i < CyberwareStationMenu.IMPLANT_SLOT_COUNT && i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (!stack.isEmpty() && stack.getItem() instanceof CyberwareItem item
-                    && def.id().equals(item.cyberwareId())) {
-                return i;
+
+        // 状态提示：右对齐到 ESC 左边
+        if (statusActive()) {
+            int right = CLOSE_X - 30;
+            String text = this.font.plainSubstrByWidth(this.status, Math.max(40, right - 120));
+            g.text(this.font, Component.literal(text), right - this.font.width(text), 7,
+                    this.statusError ? StationPaint.WARN_AMBER : StationPaint.ACCENT_CYAN);
+        }
+    }
+
+    // ---- 左栏：人体部位图 ---------------------------------------------
+
+    private void drawBodyColumn(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        StationPaint.groupBar(g, LEFT_X, 27, 10);
+        g.text(this.font, Component.literal("人体部位"), LEFT_X + 6, 28, StationPaint.TEXT_SECONDARY);
+
+        // hover 判定：鼠标是绝对坐标，人体图原点也是绝对坐标 → 直接比
+        StationBodyMap.Part hovered = StationBodyMap.partAt(
+                this.leftPos + BODY_X, this.topPos + BODY_Y, mouseX, mouseY);
+        StationBodyMap.draw(g, BODY_X, BODY_Y, this.selectedPart,
+                hovered == null ? null : hovered.slot(), installedSlots());
+
+        // 底部一行：当前部位名（状态不只靠颜色，用文字再说一遍）
+        String label = hovered != null ? hovered.label() : labelOf(this.selectedPart);
+        g.text(this.font, Component.literal(label), LEFT_X + 6, 172 - 9,
+                hovered != null ? StationPaint.ACCENT_CYAN : StationPaint.TEXT_SECONDARY);
+    }
+
+    /** 部位显示名：直接用枚举自己的名字（HAND 槽已有独立「手掌」，不再需要映射）。 */
+    private static String labelOf(CyberwareSlot slot) {
+        return slot == null ? "" : slot.displayName();
+    }
+
+    private Set<CyberwareSlot> installedSlots() {
+        Set<CyberwareSlot> set = new HashSet<>();
+        Player player = getPlayer();
+        if (player == null) {
+            return set;
+        }
+        for (String id : CyberwareInstallation.of(player).orderedIds()) {
+            CyberwareDefinition def = CyberwareDefinitions.byId(id);
+            if (def != null) {
+                set.add(def.slot());
             }
         }
-        return -1;
+        return set;
     }
 
-    /** 当前选中的型号是否已经装在身上（读同步下来的义体表）。 */
-    private boolean isSelectedInstalled() {
+    // ---- 中栏：可选安装 / 已安装 / 容量条 ------------------------------
+
+    private void drawListColumn(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        StationPaint.groupBar(g, MID_X, 27, 10);
+        g.text(this.font, Component.literal("可选安装"), MID_X + 6, 28, StationPaint.TEXT_SECONDARY);
+
+        List<CyberwareDefinition> list = listFor(this.selectedPart);
+        int viewH = LIST_BOTTOM - LIST_TOP;
+        int maxScroll = maxListScroll(list.size());
+        this.listScroll = Math.max(0, Math.min(this.listScroll, maxScroll));
+
+        this.listCards.clear();
+        if (list.isEmpty()) {
+            // 没选部位 ≠ 该部位没货：两种空态得说不同的话
+            String empty = this.selectedPart == null ? "点左侧人体选择部位" : "该部位暂无可安装义体";
+            g.text(this.font, Component.literal(empty), MID_X + 8, LIST_TOP + 8,
+                    StationPaint.TEXT_DISABLED);
+        }
+        for (int i = 0; i < list.size(); i++) {
+            int cy = LIST_TOP + i * (CARD_H + CARD_GAP) - this.listScroll;
+            if (cy + CARD_H <= LIST_TOP || cy >= LIST_BOTTOM) {
+                continue; // 超出可视区就不画（GuiGraphicsExtractor 没有公开裁剪入口）
+            }
+            CyberwareDefinition def = list.get(i);
+            boolean sel = def == this.selectedDef && !this.selectedInstalled;
+            boolean hovered = this.isHovering(MID_X, cy, MID_W, CARD_H, mouseX, mouseY);
+            StationPaint.card(g, MID_X, cy, MID_W, CARD_H, sel, hovered);
+            StationPaint.iconSlot(g, MID_X + 6, cy + 7, 10);
+            drawIcon(g, itemIcon(def), MID_X + 6, cy + 7, 10);
+
+            String name = this.font.plainSubstrByWidth(def.displayName(), MID_W - 60);
+            g.text(this.font, Component.literal(name), MID_X + 20, cy + 4,
+                    sel ? StationPaint.ACCENT_CYAN : StationPaint.TEXT_PRIMARY);
+            String desc = def.description() == null ? "" : def.description();
+            desc = this.font.plainSubstrByWidth(desc, MID_W - 52);
+            g.text(this.font, Component.literal(desc), MID_X + 20, cy + 13, StationPaint.TEXT_SECONDARY);
+
+            // 容量只给数字 ——「需要 X 义体容量」整句只在容量条那儿出现一次
+            CyberwareDefinition.Variant base = def.baseVariant();
+            if (base != null) {
+                String cap = String.valueOf(base.capacity());
+                g.text(this.font, Component.literal(cap),
+                        MID_X + MID_W - 8 - this.font.width(cap), cy + 13, StationPaint.ACCENT_CYAN);
+            }
+            this.listCards.add(new HitCard(MID_X + this.leftPos, cy + this.topPos, MID_W, CARD_H, def));
+        }
+
+        // 滚动条（2px，只在内容超出时出现）
+        if (maxScroll > 0) {
+            int barX = MID_X + MID_W - 2;
+            int barH = Math.max(10, viewH * viewH / (viewH + maxScroll));
+            int barY = LIST_TOP + (viewH - barH) * this.listScroll / maxScroll;
+            g.fill(barX, LIST_TOP, barX + 2, LIST_BOTTOM, StationPaint.withAlpha(StationPaint.BG_DEEP, 0.85F));
+            g.fill(barX, barY, barX + 2, barY + barH, StationPaint.withAlpha(StationPaint.ACCENT_CYAN, 0.75F));
+        }
+
+        // 分隔（规范说能用留白就别用线条，所以只画一条极淡的）
+        g.fill(MID_X, 94, MID_X + MID_W, 95, StationPaint.withAlpha(StationPaint.LINE, 0.55F));
+
+        drawInstalled(g, mouseX, mouseY);
+        drawCapacity(g);
+    }
+
+    private int maxListScroll(int rows) {
+        int content = rows * (CARD_H + CARD_GAP) - CARD_GAP;
+        return Math.max(0, content - (LIST_BOTTOM - LIST_TOP));
+    }
+
+    /** 已安装：按实际数量生成格子，绝不画固定 5 格 / 红色禁用块。 */
+    private void drawInstalled(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        StationPaint.groupBar(g, MID_X, 98, 10);
+        g.text(this.font, Component.literal("已安装"), MID_X + 6, 99, StationPaint.TEXT_SECONDARY);
+
+        List<String> ids = installedIds();
+        this.installedCells.clear();
+        if (ids.isEmpty()) {
+            g.text(this.font, Component.literal("还没有安装任何义体"), MID_X + 8, INST_TOP + 4,
+                    StationPaint.TEXT_DISABLED);
+            return;
+        }
+        int shown = Math.min(ids.size(), INST_COLS * INST_ROWS);
+        for (int i = 0; i < shown; i++) {
+            String id = ids.get(i);
+            CyberwareDefinition def = CyberwareDefinitions.byId(id);
+            int cx = MID_X + 2 + (i % INST_COLS) * (INST_CELL_W + INST_GAP);
+            int cy = INST_TOP + (i / INST_COLS) * (INST_CELL_H + INST_GAP);
+            boolean sel = this.selectedInstalled && id.equals(this.selectedDef == null ? null : this.selectedDef.id());
+            boolean hovered = this.isHovering(cx, cy, INST_CELL_W, INST_CELL_H, mouseX, mouseY);
+            StationPaint.roundRect(g, cx, cy, INST_CELL_W, INST_CELL_H, StationPaint.RADIUS_CARD,
+                    hovered ? StationPaint.BG_HOVER : StationPaint.BG_DEEP);
+            StationPaint.outline(g, cx, cy, INST_CELL_W, INST_CELL_H,
+                    sel ? StationPaint.ACCENT_CYAN
+                            : StationPaint.withAlpha(StationPaint.LINE, hovered ? 0.9F : 0.6F));
+            if (def != null) {
+                drawIcon(g, itemIcon(def), cx + 2, cy + 2, 8);
+                String shortName = this.font.plainSubstrByWidth(def.displayName(), 18);
+                g.text(this.font, Component.literal(shortName), cx + 11, cy + 2,
+                        sel ? StationPaint.ACCENT_CYAN : StationPaint.TEXT_PRIMARY);
+                String cap = String.valueOf(capacityOf(id));
+                g.text(this.font, Component.literal(cap), cx + 11, cy + 11, StationPaint.ACCENT_CYAN);
+            } else {
+                g.text(this.font, Component.literal("?"), cx + 11, cy + 6, StationPaint.TEXT_DISABLED);
+            }
+            this.installedCells.add(new HitCell(cx + this.leftPos, cy + this.topPos,
+                    INST_CELL_W, INST_CELL_H, id));
+        }
+        if (ids.size() > shown) {
+            String more = "+" + (ids.size() - shown);
+            g.text(this.font, Component.literal(more), MID_X + MID_W - 6 - this.font.width(more),
+                    99, StationPaint.TEXT_DISABLED);
+        }
+    }
+
+    /** 容量条 + 全屏唯一一句「+X / 剩余 Y」。 */
+    private void drawCapacity(GuiGraphicsExtractor g) {
+        Player player = getPlayer();
+        int limit = CyberwareInstallation.capacityLimit();
+        int used = player == null ? 0 : CyberwareInstallation.usedCapacity(player);
+        boolean unlimited = limit == Integer.MAX_VALUE;
+        StationPaint.capacityBar(g, MID_X, CAP_BAR_Y, MID_W, CAP_BAR_H, used, unlimited ? 0 : limit);
+
+        String left = "已用 " + used + (unlimited ? "" : "/" + limit);
+        g.text(this.font, Component.literal(left), MID_X, CAP_TEXT_Y, StationPaint.TEXT_SECONDARY);
+
+        int need = selectedCost();
+        String right = "+" + (need < 0 ? "—" : String.valueOf(need)) + " / 剩余 "
+                + (unlimited ? "∞" : String.valueOf(Math.max(0, limit - used)));
+        // 剩余不足时给警告色（不只靠颜色：文案本身也写了数字）
+        boolean tight = !unlimited && need >= 0 && used + need > limit;
+        g.text(this.font, Component.literal(right), MID_X + MID_W - this.font.width(right), CAP_TEXT_Y,
+                tight ? StationPaint.WARN_AMBER : StationPaint.ACCENT_CYAN);
+    }
+
+    /** 当前选中件的容量占用；没选中返回 -1。 */
+    private int selectedCost() {
+        if (this.selectedDef == null) {
+            return -1;
+        }
+        if (this.selectedInstalled) {
+            return capacityOf(this.selectedDef.id());
+        }
+        CyberwareDefinition.Variant base = this.selectedDef.baseVariant();
+        return base == null ? -1 : base.capacity();
+    }
+
+    private List<String> installedIds() {
+        Player player = getPlayer();
+        return player == null ? List.of() : CyberwareInstallation.of(player).orderedIds();
+    }
+
+    private int capacityOf(String defId) {
+        CyberwareDefinition def = CyberwareDefinitions.byId(defId);
+        Player player = getPlayer();
+        if (def == null || player == null) {
+            return 0;
+        }
+        CyberwareData data = CyberwareInstallation.dataOf(player, defId);
+        CyberwareDefinition.Variant v = data == null ? null : def.variantFor(data.rarity());
+        if (v == null) {
+            v = def.baseVariant();
+        }
+        return v == null ? 0 : v.capacity();
+    }
+
+    private List<CyberwareDefinition> listFor(CyberwareSlot slot) {
+        if (slot == this.cachedPart) {
+            return this.cachedList;
+        }
+        List<CyberwareDefinition> list = new ArrayList<>();
+        if (slot != null) {
+            for (CyberwareDefinition def : CyberwareDefinitions.all().values()) {
+                if (def.slot() == slot) {
+                    list.add(def);
+                }
+            }
+            list.sort(Comparator.comparing(CyberwareDefinition::displayName));
+        }
+        this.cachedPart = slot;
+        this.cachedList = List.copyOf(list);
+        return this.cachedList;
+    }
+
+    // ---- 右栏：详情 ---------------------------------------------------
+
+    private void drawDetailColumn(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        StationPaint.groupBar(g, DETAIL_X, 27, 10);
+        g.text(this.font, Component.literal("已选中的义体"), DETAIL_X + 6, 28, StationPaint.TEXT_SECONDARY);
+
+        int dx = DETAIL_X + 4;
+        int dw = DETAIL_W - 8;
+        if (this.selectedDef == null) {
+            drawPartInfo(g, dx, dw);
+            return;
+        }
+
         CyberwareDefinition def = this.selectedDef;
-        return def != null && CyberwareInstallation.has(this.minecraft.player, def.id());
+        CyberwareDefinition.Variant base = def.baseVariant();
+        int accent = base == null ? StationPaint.ACCENT_CYAN : base.rarity().color();
+
+        // 名称 / 英文名
+        String name = this.font.plainSubstrByWidth(def.displayName(), dw);
+        g.text(this.font, Component.literal(name), dx, 42, StationPaint.TEXT_PRIMARY);
+        String en = englishName(def);
+        g.text(this.font, Component.literal(this.font.plainSubstrByWidth(en, dw)), dx, 54,
+                StationPaint.TEXT_SECONDARY);
+
+        // 稀有度标签（12% alpha 底，规范 3.6）
+        if (base != null) {
+            String tag = base.rarity().displayName();
+            int tw = this.font.width(tag) + 8;
+            StationPaint.tag(g, dx, 66, tw, 11, accent);
+            g.text(this.font, Component.literal(tag), dx + 4, 67, accent);
+        }
+
+        // 加成及效果
+        StationPaint.groupBar(g, dx, 83, 9);
+        g.text(this.font, Component.literal("加成及效果"), dx + 6, 84, StationPaint.TEXT_SECONDARY);
+
+        int rowY = 96;
+        int maxRows = 4;
+        int drawn = 0;
+        if (base != null) {
+            for (var entry : base.stats().entrySet()) {
+                if (drawn >= maxRows) {
+                    break;
+                }
+                String label = this.font.plainSubstrByWidth(statLabel(entry.getKey()), dw - 32);
+                g.text(this.font, Component.literal(label), dx, rowY, StationPaint.TEXT_SECONDARY);
+                String value = formatStat(entry.getKey(), entry.getValue());
+                g.text(this.font, Component.literal(value), dx + dw - this.font.width(value), rowY,
+                        StationPaint.ACCENT_CYAN);
+                rowY += 11;
+                drawn++;
+            }
+        }
+        if (drawn == 0) {
+            g.text(this.font, Component.literal("（该型号无数值）"), dx, rowY, StationPaint.TEXT_DISABLED);
+            rowY += 11;
+        }
+        if (this.selectedInstalled) {
+            g.text(this.font, Component.literal("· 已装在身上"), dx, rowY, StationPaint.OK_GREEN);
+            rowY += 11;
+        }
+
+        // 占位结构：设计稿这里是故意留白的，给后续功能占位，别塞满
+        int phTop = Math.max(rowY + StationPaint.GAP_XS, 142);
+        if (phTop < 170) {
+            StationPaint.placeholder(g, dx, phTop, dw, 170 - phTop);
+            String hint = "预留";
+            g.text(this.font, Component.literal(hint), dx + (dw - this.font.width(hint)) / 2,
+                    phTop + (170 - phTop) / 2 - 3, StationPaint.TEXT_DISABLED);
+        }
     }
 
-    /** 点「安装」：本地预检 → 发请求。预检用的是服务端同一份 {@code validateInstall}。 */
+    /** 没选中义体时，右栏显示当前部位的信息（点部位只切这里，不执行安装）。 */
+    private void drawPartInfo(GuiGraphicsExtractor g, int dx, int dw) {
+        CyberwareSlot part = this.selectedPart;
+        if (part == null) {
+            g.text(this.font, Component.literal("点左侧人体选择部位"), dx, 42, StationPaint.TEXT_DISABLED);
+            return;
+        }
+        String label = this.font.plainSubstrByWidth(labelOf(part), dw);
+        g.text(this.font, Component.literal(label), dx, 42, StationPaint.TEXT_PRIMARY);
+        g.text(this.font, Component.literal("安装区"), dx, 54, StationPaint.TEXT_SECONDARY);
+
+        int usedInSlot = 0;
+        for (String id : installedIds()) {
+            CyberwareDefinition def = CyberwareDefinitions.byId(id);
+            if (def != null && def.slot() == part) {
+                usedInSlot++;
+            }
+        }
+        StationPaint.groupBar(g, dx, 71, 9);
+        g.text(this.font, Component.literal("本部位"), dx + 6, 72, StationPaint.TEXT_SECONDARY);
+        g.text(this.font, Component.literal("已装 " + usedInSlot + "/" + Math.max(1, part.maxCount())),
+                dx, 84, StationPaint.TEXT_PRIMARY);
+        g.text(this.font, Component.literal("可安装 " + listFor(part).size() + " 件"), dx, 95,
+                StationPaint.TEXT_SECONDARY);
+
+        StationPaint.placeholder(g, dx, 142, dw, 28);
+        String hint = "预留";
+        g.text(this.font, Component.literal(hint), dx + (dw - this.font.width(hint)) / 2, 153,
+                StationPaint.TEXT_DISABLED);
+    }
+
+    /** 英文名：定义表没有独立英文字段，用注册 id 推导（待核实是否有更正规的来源）。 */
+    private static String englishName(CyberwareDefinition def) {
+        return def.id().toUpperCase(Locale.ROOT).replace('_', ' ');
+    }
+
+    // ---- 底部：快捷栏标签 + 安装按钮 ----------------------------------
+
+    private void drawBottom(GuiGraphicsExtractor g, int mouseX, int mouseY) {
+        // 左下角版本号（设计稿「Mod版本号」）：左栏卡片最后一行留给部位名，所以放卡片正下方
+        g.text(this.font, Component.literal(MOD_VERSION), LEFT_X + 2, 181, StationPaint.TEXT_DISABLED);
+
+        // v0.5.4：送料槽已删（安装直接从背包取），底部只剩快捷栏与安装按钮
+        g.text(this.font, Component.literal("快捷栏"), 38, HOTBAR_Y + 4, StationPaint.TEXT_DISABLED);
+
+        String reason = installBlockReason();
+        boolean ready = reason == null;
+        boolean hovered = ready && this.isHovering(BTN_X, BTN_Y, BTN_W, BTN_H, mouseX, mouseY);
+        StationPaint.button(g, BTN_X, BTN_Y, BTN_W, BTN_H, ready, hovered);
+        String label = this.selectedInstalled ? "卸载" : "安装";
+        int fg = !ready ? StationPaint.TEXT_DISABLED
+                : (hovered ? StationPaint.ACCENT_CYAN : StationPaint.TEXT_PRIMARY);
+        g.text(this.font, Component.literal(label), BTN_X + (BTN_W - this.font.width(label)) / 2,
+                BTN_Y + 4, fg);
+
+        // 按钮下方一行原因（不可用时才写，且不重复「需要 X 义体容量」那句）
+        if (!ready) {
+            String why = this.font.plainSubstrByWidth(reason, BTN_W + 16);
+            g.text(this.font, Component.literal(why), BTN_X + (BTN_W - this.font.width(why)) / 2,
+                    BTN_Y + BTN_H + 2, StationPaint.TEXT_DISABLED);
+        }
+    }
+
+    /**
+     * 底部按钮为什么不能点；{@code null} = 可以点。
+     *
+     * <p>预检用的是服务端同一份 {@link CyberwareStationService#validateInstall}（纯函数，不改状态），
+     * 所以「置灰」和「服务端真正拒绝」的理由不会打架。
+     */
+    private String installBlockReason() {
+        if (this.selectedDef == null) {
+            return "先选中一件义体";
+        }
+        if (this.selectedInstalled) {
+            return null; // 卸载不预判，交给服务端
+        }
+        Player player = getPlayer();
+        if (player == null) {
+            return "玩家数据未就绪";
+        }
+        // v0.5.4：安装材料从背包取（没有送料槽了）。定位规则与服务端**同一个方法**，
+        // 否则会出现「界面说能装、服务端却扣了另一格」。
+        int at = CyberwareStationService.findInventorySlot(player, this.selectedDef.id());
+        if (at < 0) {
+            return "背包里没有这件义体";
+        }
+        ItemStack stack = player.getInventory().getItem(at);
+        return CyberwareStationService.validateInstall(this.selectedDef, CyberwareItem.dataOf(stack),
+                CyberwareInstallation.of(player));
+    }
+
+    // ==================================================================
+    // 安装 / 卸载（客户端只发请求，服务端裁决）
+    // ==================================================================
+
     private void requestInstall() {
         CyberwareDefinition def = this.selectedDef;
         if (def == null) {
-            setStatus("先在左侧选一件义体", true);
+            setStatus("先选中一件义体", true);
             return;
         }
-        int slot = installSourceSlot();
-        if (slot < 0) {
-            setStatus("操作台槽里没有「" + def.displayName() + "」", true);
+        Player player = getPlayer();
+        if (player == null) {
             return;
         }
-        Player player = this.minecraft.player;
-        CyberwareData data = CyberwareItem.dataOf(this.menu.getImplantContainer().getItem(slot));
+        int at = CyberwareStationService.findInventorySlot(player, def.id());
+        if (at < 0) {
+            setStatus("背包里没有「" + def.displayName() + "」", true);
+            return;
+        }
+        CyberwareData data = CyberwareItem.dataOf(player.getInventory().getItem(at));
         String problem = CyberwareStationService.validateInstall(def, data, CyberwareInstallation.of(player));
         if (problem != null) {
             setStatus(problem, true);
             return;
         }
-        ClientPacketDistributor.sendToServer(
-                CyberwareActionPayload.install(this.menu.containerId, slot));
+        // 只报型号，扣哪一格由服务端 findInventorySlot 裁决（两端同一条规则）
+        ClientPlayNetworking.send(CyberwareActionPayload.install(this.menu.containerId, def.id()));
         setStatus("已发送安装请求：" + def.displayName(), false);
     }
 
-    /** 点「卸载」：本地预检 → 发请求（带 defId，服务端据此定位要卸哪一件）。 */
     private void requestUninstall() {
         CyberwareDefinition def = this.selectedDef;
         if (def == null) {
-            setStatus("先在左侧选一件义体", true);
+            setStatus("先选中一件义体", true);
             return;
         }
-        if (!isSelectedInstalled()) {
+        if (!this.selectedInstalled) {
             setStatus("身上没有装「" + def.displayName() + "」", true);
             return;
         }
-        ClientPacketDistributor.sendToServer(
-                CyberwareActionPayload.uninstall(this.menu.containerId, def.id()));
+        ClientPlayNetworking.send(CyberwareActionPayload.uninstall(this.menu.containerId, def.id()));
         setStatus("已发送卸载请求：" + def.displayName(), false);
     }
 
@@ -353,14 +726,203 @@ public class CyberwareStationScreen extends AbstractContainerScreen<CyberwareSta
         return !this.status.isEmpty() && Util.getMillis() - this.statusAt < STATUS_MILLIS;
     }
 
-    // ------------------------------------------------------------------
-    // 分类树
-    // ------------------------------------------------------------------
+    // ==================================================================
+    // 交互
+    // ==================================================================
 
-    private static Identifier slotIcon(CyberwareSlot slot) {
-        return Identifier.fromNamespaceAndPath(Cyberware.MODID,
-                "textures/gui/slot/slot_" + slot.name().toLowerCase(Locale.ROOT) + ".png");
+    @Override
+    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
+        if (event.button() != 0) {
+            return super.mouseClicked(event, doubleClick);
+        }
+        double mx = event.x();
+        double my = event.y();
+
+        // ① 右上小 ×：退出（ESC 是默认行为，这里只是给触屏一个手感）
+        if (this.isHovering(CLOSE_X, CLOSE_Y, CLOSE_S, CLOSE_S, mx, my)) {
+            this.onClose();
+            return true;
+        }
+
+        // ② 安装 / 卸载：靠状态判定，不靠位置；置灰时点了只出提示、不发请求
+        if (this.isHovering(BTN_X, BTN_Y, BTN_W, BTN_H, mx, my)) {
+            String reason = installBlockReason();
+            if (reason == null) {
+                if (this.selectedInstalled) {
+                    requestUninstall();
+                } else {
+                    requestInstall();
+                }
+            } else {
+                setStatus(reason, true);
+            }
+            return true;
+        }
+
+        // ③ 快捷栏：交给原版处理抓放物品（安装不再需要把物品拖进任何槽里）
+        if (hotbarSlotIndexAt(mx, my) >= 0) {
+            return super.mouseClicked(event, doubleClick);
+        }
+
+        // ④ 已安装格：点一下切到该件详情（再点取消）
+        for (HitCell cell : this.installedCells) {
+            if (isInside(mx, my, cell.x(), cell.y(), cell.w(), cell.h())) {
+                CyberwareDefinition def = CyberwareDefinitions.byId(cell.defId());
+                if (def == this.selectedDef && this.selectedInstalled) {
+                    this.selectedDef = null;
+                    this.selectedInstalled = false;
+                } else {
+                    this.selectedDef = def;
+                    this.selectedInstalled = true;
+                }
+                return true;
+            }
+        }
+
+        // ⑤ 列表：记下按下点，松开时若没怎么动才算「点选」（触屏拖动不误选）
+        if (isInside(mx, my, this.leftPos + MID_X, this.topPos + LIST_TOP, MID_W,
+                LIST_BOTTOM - LIST_TOP)) {
+            this.draggingList = true;
+            this.pressY = my;
+            this.dragStartY = my;
+            this.pressCard = null;
+            for (HitCard card : this.listCards) {
+                if (isInside(mx, my, card.x(), card.y(), card.w(), card.h())) {
+                    this.pressCard = card.def();
+                    break;
+                }
+            }
+            return true;
+        }
+
+        // ⑥ 人体部位：只切换右侧信息，绝不在这里执行安装
+        StationBodyMap.Part part = StationBodyMap.partAt(
+                this.leftPos + BODY_X, this.topPos + BODY_Y, mx, my);
+        if (part != null) {
+            selectPart(part.slot());
+            return true;
+        }
+
+        // ⑦ 点空白：义体与部位一起取消（设计稿「点空白取消」）
+        if (this.selectedDef != null || this.selectedInstalled || this.selectedPart != null) {
+            clearPart();
+            return true;
+        }
+        return super.mouseClicked(event, doubleClick);
     }
+
+    @Override
+    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (this.draggingList) {
+            this.listScroll -= (int) Math.round(event.y() - this.pressY);
+            this.pressY = event.y();
+            int maxScroll = maxListScroll(listFor(this.selectedPart).size());
+            this.listScroll = Math.max(0, Math.min(this.listScroll, maxScroll));
+            return true;
+        }
+        return super.mouseDragged(event, dragX, dragY);
+    }
+
+    @Override
+    public boolean mouseReleased(MouseButtonEvent event) {
+        if (this.draggingList) {
+            boolean tapped = Math.abs(event.y() - this.dragStartY) < 4.0D;
+            this.draggingList = false;
+            CyberwareDefinition card = this.pressCard;
+            this.pressCard = null;
+            if (tapped && card != null) {
+                // 点击选中、再点取消
+                if (card == this.selectedDef && !this.selectedInstalled) {
+                    this.selectedDef = null;
+                } else {
+                    this.selectedDef = card;
+                    this.selectedInstalled = false;
+                    this.selectedPart = card.slot();
+                }
+            }
+            clampListScroll();
+            return true;
+        }
+        return super.mouseReleased(event);
+    }
+
+    @Override
+    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
+        if (isInside(mouseX, mouseY, this.leftPos + MID_X, this.topPos + LIST_TOP, MID_W,
+                LIST_BOTTOM - LIST_TOP)) {
+            this.listScroll -= (int) (scrollY * (CARD_H + CARD_GAP));
+            clampListScroll();
+            return true;
+        }
+        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
+    }
+
+    private void clampListScroll() {
+        int maxScroll = maxListScroll(listFor(this.selectedPart).size());
+        this.listScroll = Math.max(0, Math.min(this.listScroll, maxScroll));
+    }
+
+    /**
+     * 切换部位：中栏列表跟着换，右栏回到部位信息（不自动选中任何义体）。
+     *
+     * <p><b>再点同一部位 = 取消选中</b>（设计稿「点击选中 → 再点取消」）。
+     * 取消后 {@code selectedPart == null}，全链路都吃 null：{@link #listFor} 返回空表、
+     * 右栏 {@link #drawPartInfo} 已写「点左侧人体选择部位」、{@link #labelOf} 返回空串、
+     * 人体图 draw 收到 null 就不画高亮。
+     */
+    private void selectPart(CyberwareSlot slot) {
+        if (slot == this.selectedPart) {
+            clearPart();
+            return;
+        }
+        this.selectedPart = slot;
+        this.selectedDef = null;
+        this.selectedInstalled = false;
+        this.listScroll = 0;
+    }
+
+    /** 取消部位选中：中栏回空态、右栏回到「点左侧人体选择部位」。 */
+    private void clearPart() {
+        this.selectedPart = null;
+        this.selectedDef = null;
+        this.selectedInstalled = false;
+        this.listScroll = 0;
+    }
+
+    /** 快捷栏第 {@code i} 格在 {@code menu.slots} 里的下标；菜单结构异常时返回 -1。 */
+    private int hotbarSlotIndex(int i) {
+        int index = this.menu.slots.size() - HOTBAR_SLOTS + i;
+        return index >= 0 && index < this.menu.slots.size() ? index : -1;
+    }
+
+    /** 鼠标落在第几个快捷栏格上（返回 menu.slots 下标，-1 = 没有）。{@code getHoveredSlot} 在 26.x 是私有的，自己算。 */
+    private int hotbarSlotIndexAt(double mouseX, double mouseY) {
+        for (int i = 0; i < HOTBAR_SLOTS; i++) {
+            int index = hotbarSlotIndex(i);
+            if (index < 0) {
+                continue;
+            }
+            Slot slot = this.menu.slots.get(index);
+            int sx = this.leftPos + slot.x;
+            int sy = this.topPos + slot.y;
+            if (isInside(mouseX, mouseY, sx, sy, 16, 16)) {
+                return index;
+            }
+        }
+        return -1;
+    }
+
+    private Player getPlayer() {
+        return this.minecraft == null ? null : this.minecraft.player;
+    }
+
+    private static boolean isInside(double mx, double my, int x, int y, int w, int h) {
+        return mx >= x && mx < x + w && my >= y && my < y + h;
+    }
+
+    // ==================================================================
+    // 图标 / 文案
+    // ==================================================================
 
     private static Identifier itemIcon(CyberwareDefinition def) {
         return Identifier.fromNamespaceAndPath(Cyberware.MODID, "textures/item/" + def.id() + ".png");
@@ -369,350 +931,6 @@ public class CyberwareStationScreen extends AbstractContainerScreen<CyberwareSta
     private static void drawIcon(GuiGraphicsExtractor g, Identifier icon, int x, int y, int size) {
         g.blit(RenderPipelines.GUI_TEXTURED, icon, x, y, 0.0F, 0.0F, size, size, 32, 32);
     }
-
-    /**
-     * 绘制分类树。
-     *
-     * <p>内容先整体排版（算出总高度），再按滚动偏移取可见区间绘制 —— 超出面板的行直接跳过，
-     * 因为 {@link GuiGraphicsExtractor} 没有公开的裁剪入口。
-     */
-    private void drawTree(GuiGraphicsExtractor g, int tx, int ty, int mouseX, int mouseY) {
-        int viewTop = ty;
-        int viewBottom = TREE_BOTTOM;
-
-        // ---- 第一遍：算出内容总高度 ----
-        int total = 0;
-        for (CyberwareSlot slot : CyberwareSlot.values()) {
-            total += ROW_H;
-            if (slot == this.expandedSlot) {
-                total += countOf(slot) * ROW_H;
-            }
-        }
-        this.contentHeight = total;
-        int viewH = viewBottom - viewTop;
-        int maxScroll = Math.max(0, total - viewH);
-        if (this.scroll > maxScroll) {
-            this.scroll = maxScroll;
-        }
-        if (this.scroll < 0) {
-            this.scroll = 0;
-        }
-
-        // ---- 第二遍：只画可见行 ----
-        int cursor = 0;
-        for (CyberwareSlot slot : CyberwareSlot.values()) {
-            int rowY = viewTop + cursor - this.scroll;
-            if (rowY + ROW_H > viewTop && rowY < viewBottom) {
-                boolean expanded = slot == this.expandedSlot;
-                // 用父类的 isHovering(int,int,int,int,double,double)：它会自己减 leftPos/topPos。
-                // 之前这里用 isInside(mouseX, mouseY, 面板坐标...) 比较的是两个不同坐标系，
-                // hover 高亮实际偏了 (leftPos, topPos)（点击不受影响，因为那用的是绝对坐标）。
-                boolean hovered = this.isHovering(tx, rowY, TREE_W, ROW_H, mouseX, mouseY);
-                if (hovered) {
-                    g.fill(tx, rowY, tx + TREE_W, rowY + ROW_H, HOVER_BG);
-                }
-                drawIcon(g, slotIcon(slot), tx + 2, rowY + 1, 12);
-                int nameColor = hovered || expanded ? ACCENT : TEXT;
-                g.text(this.font, Component.literal(slot.displayName()), tx + 18, rowY + 3, nameColor);
-                // 右侧箭头
-                String arrow = expanded ? "v" : ">";
-                g.text(this.font, Component.literal(arrow), tx + TREE_W - 10, rowY + 3, expanded ? ACCENT : DIM);
-                // 命中区存的是**屏幕绝对坐标**，鼠标事件用的就是这个坐标系
-                this.treeRows.add(new HitRow(tx + this.leftPos, rowY + this.topPos,
-                        TREE_W, ROW_H, slot, null));
-            }
-            cursor += ROW_H;
-
-            if (slot != this.expandedSlot) {
-                continue;
-            }
-            for (CyberwareDefinition def : CyberwareDefinitions.all().values()) {
-                if (def.slot() != slot) {
-                    continue;
-                }
-                rowY = viewTop + cursor - this.scroll;
-                if (rowY + ROW_H > viewTop && rowY < viewBottom) {
-                    boolean sel = def == this.selectedDef;
-                    boolean hovered = this.isHovering(tx + 8, rowY, TREE_W - 8, ROW_H, mouseX, mouseY);
-                    if (sel || hovered) {
-                        g.fill(tx + 8, rowY, tx + TREE_W, rowY + ROW_H, sel ? SEL_BG : HOVER_BG);
-                    }
-                    if (sel) {
-                        g.fill(tx + 8, rowY, tx + 10, rowY + ROW_H, ACCENT);
-                    }
-                    drawIcon(g, itemIcon(def), tx + 13, rowY + 1, 12);
-                    CyberwareDefinition.Variant base = def.baseVariant();
-                    int color = base == null ? DIM : base.rarity().color();
-                    String name = this.font.plainSubstrByWidth(def.displayName(), TREE_W - 44);
-                    g.text(this.font, Component.literal(name), tx + 28, rowY + 3,
-                            sel ? ACCENT : (hovered ? ACCENT : color));
-                    // 稀有度简写
-                    if (base != null) {
-                        String tag = base.rarity().displayName();
-                        tag = tag.substring(0, Math.min(1, tag.length()));
-                        g.text(this.font, Component.literal(tag), tx + TREE_W - 12, rowY + 3, color);
-                    }
-                    this.treeRows.add(new HitRow(tx + 8 + this.leftPos, rowY + this.topPos,
-                            TREE_W - 8, ROW_H, slot, def));
-                }
-                cursor += ROW_H;
-            }
-        }
-
-        // ---- 滚动条 ----
-        if (total > viewH && total > 0) {
-            int barX = tx + TREE_W - 2;
-            int barH = Math.max(12, viewH * viewH / total);
-            int barY = viewTop + (viewH - barH) * this.scroll / Math.max(1, maxScroll);
-            g.fill(barX, viewTop, barX + 2, viewBottom, 0x33FFFFFF);
-            g.fill(barX, barY, barX + 2, barY + barH, ACCENT);
-        }
-    }
-
-    /** 高亮当前分类对应的那个义体槽，让「列表 ↔ 槽位」的对应关系一眼可见。 */
-    private void drawSelectedImplantFrame(GuiGraphicsExtractor g) {
-        if (this.expandedSlot == null) {
-            return;
-        }
-        int index = this.expandedSlot.ordinal();
-        if (index >= CyberwareStationMenu.IMPLANT_SLOT_COUNT || index >= this.menu.slots.size()) {
-            return;
-        }
-        Slot slot = this.menu.slots.get(index);
-        // 同样在相对面板的坐标系里
-        int sx = slot.x;
-        int sy = slot.y;
-        g.fill(sx - 1, sy - 1, sx + 17, sy, ACCENT);
-        g.fill(sx - 1, sy + 16, sx + 17, sy + 17, ACCENT);
-        g.fill(sx - 1, sy - 1, sx, sy + 17, ACCENT);
-        g.fill(sx + 16, sy - 1, sx + 17, sy + 17, ACCENT);
-    }
-
-    private static int countOf(CyberwareSlot slot) {
-        int n = 0;
-        for (CyberwareDefinition def : CyberwareDefinitions.all().values()) {
-            if (def.slot() == slot) {
-                n++;
-            }
-        }
-        return n;
-    }
-
-    // ------------------------------------------------------------------
-    // 右侧详情
-    // ------------------------------------------------------------------
-
-    private void drawDetail(GuiGraphicsExtractor g, int dx, int dy) {
-        CyberwareDefinition def = this.selectedDef;
-        if (def == null) {
-            g.text(this.font, Component.literal("（未选择义体）"), dx, dy, DIM);
-            return;
-        }
-
-        CyberwareDefinition.Variant base = def.baseVariant();
-        int accent = base == null ? ACCENT : base.rarity().color();
-        boolean installed = CyberwareInstallation.has(this.minecraft.player, def.id());
-
-        // 图标 + 名称
-        drawIcon(g, itemIcon(def), dx, dy, 28);
-        int textX = dx + 34;
-        g.text(this.font, Component.literal(def.displayName()), textX, dy + 2, accent);
-        g.text(this.font, Component.literal(def.slot().displayName()), textX, dy + 13, DIM);
-        if (base != null) {
-            g.text(this.font, Component.literal(base.rarity().displayName()), textX, dy + 24, accent);
-        }
-        if (installed) {
-            // 已装标记：告诉玩家「卸载」按钮现在有意义
-            String tag = "已装";
-            g.text(this.font, Component.literal(tag), dx + PANEL_W - 22 - this.font.width(tag),
-                    dy + 2, ACCENT);
-        }
-        dy += 34;
-
-        if (base == null) {
-            g.text(this.font, Component.literal("（该型号无数值）"), dx, dy, DIM);
-            return;
-        }
-
-        dy = section(g, dx, dy, "容量 " + base.capacity());
-
-        // 按钮占着最下面一行，内容超过就截断（原来会直接画到按钮/面板外）
-        int contentBottom = BTN_Y - 4;
-        for (var entry : base.stats().entrySet()) {
-            if (dy + 9 > contentBottom) {
-                g.text(this.font, Component.literal("…"), dx, dy, DIM);
-                return;
-            }
-            g.text(this.font, Component.literal(statLabel(entry.getKey())), dx, dy, DIM);
-            String v = formatStat(entry.getKey(), entry.getValue());
-            g.text(this.font, Component.literal(v), dx + 96, dy, TEXT);
-            dy += 10;
-        }
-
-        // 全部变体（稀有度 + 容量）
-        if (def.variants() != null && def.variants().size() > 1 && dy + 15 <= contentBottom) {
-            dy += 4;
-            g.text(this.font, Component.literal("型号 / 稀有度"), dx, dy, ACCENT);
-            dy += 11;
-            for (CyberwareDefinition.Variant v : def.variants()) {
-                if (dy + 9 > contentBottom) {
-                    g.text(this.font, Component.literal("…"), dx, dy, DIM);
-                    return;
-                }
-                g.text(this.font, Component.literal(v.rarity().displayName()), dx, dy, v.rarity().color());
-                g.text(this.font, Component.literal("容量 " + v.capacity()), dx + 60, dy, DIM);
-                dy += 10;
-            }
-        }
-    }
-
-    private int section(GuiGraphicsExtractor g, int dx, int dy, String label) {
-        g.text(this.font, Component.literal(label), dx, dy, TEXT);
-        return dy + 13;
-    }
-
-    // ------------------------------------------------------------------
-    // 交互
-    // ------------------------------------------------------------------
-
-    @Override
-    public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() == 0) {
-            // ① 先判两个操作按钮：命中就发请求，并且**不再交给原版槽位处理**
-            //    （否则同一次点击会既发安装请求、又去抓起操作台槽里的那件义体）
-            if (this.isHovering(BTN_INSTALL_X, BTN_Y, BTN_W, BTN_H, event.x(), event.y())) {
-                requestInstall();
-                return true;
-            }
-            if (this.isHovering(BTN_UNINSTALL_X, BTN_Y, BTN_W, BTN_H, event.x(), event.y())) {
-                requestUninstall();
-                return true;
-            }
-            // ② 落在列表区域内 → 记下起点，接下来可能是拖动
-            if (isInside(event.x(), event.y(), this.leftPos + TREE_X, this.topPos + TREE_TOP,
-                    TREE_W, TREE_BOTTOM - TREE_TOP)) {
-                this.draggingTree = true;
-                this.lastDragY = event.y();
-            }
-            // ③ 点在底部义体槽上 → 树切到该槽位对应的分类，只列出能装进去的义体
-            //    （槽位本身保持原版行为：可以点起来/放下义体，用来把快捷栏的物品放进义体槽）
-            int implantIndex = implantSlotIndexAt(event.x(), event.y());
-            if (implantIndex >= 0) {
-                selectImplantSlot(implantIndex);
-                // 槽里正好有义体 → 顺手把详情面板切到它，玩家接着就能点「安装」
-                ItemStack inSlot = this.menu.getImplantContainer().getItem(implantIndex);
-                if (!inSlot.isEmpty() && inSlot.getItem() instanceof CyberwareItem item) {
-                    CyberwareDefinition def = item.definition();
-                    if (def != null) {
-                        this.selectedDef = def;
-                    }
-                }
-                return super.mouseClicked(event, doubleClick);
-            }
-            for (HitRow row : this.treeRows) {
-                if (!isInside(event.x(), event.y(), row.x(), row.y(), row.w(), row.h())) {
-                    continue;
-                }
-                if (row.def() != null) {
-                    this.selectedDef = row.def();
-                } else {
-                    this.expandedSlot = (this.expandedSlot == row.slot()) ? null : row.slot();
-                    this.scroll = 0;
-                    CyberwareDefinition first = firstOf(row.slot());
-                    if (first != null) {
-                        this.selectedDef = first;
-                    }
-                }
-                return true;
-            }
-        }
-        return super.mouseClicked(event, doubleClick);
-    }
-
-    /**
-     * 手机上**没有滚轮** —— 触摸屏不会触发 {@code mouseScrolled}，
-     * 所以列表必须支持「按住拖动」。拖动期间按纵向位移直接推 scroll。
-     */
-    @Override
-    public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-        if (this.draggingTree) {
-            this.scroll -= (int) Math.round(event.y() - this.lastDragY);
-            this.lastDragY = event.y();
-            clampScroll();
-            return true;
-        }
-        return super.mouseDragged(event, dragX, dragY);
-    }
-
-    @Override
-    public boolean mouseReleased(MouseButtonEvent event) {
-        this.draggingTree = false;
-        return super.mouseReleased(event);
-    }
-
-    private void clampScroll() {
-        int viewH = TREE_BOTTOM - TREE_TOP;
-        int maxScroll = Math.max(0, this.contentHeight - viewH);
-        this.scroll = Math.max(0, Math.min(this.scroll, maxScroll));
-    }
-
-    @Override
-    public boolean mouseScrolled(double mouseX, double mouseY, double scrollX, double scrollY) {
-        if (isInside(mouseX, mouseY, this.leftPos + TREE_X, this.topPos + TREE_TOP,
-                TREE_W, TREE_BOTTOM - TREE_TOP)) {
-            this.scroll -= (int) (scrollY * ROW_H * 2);
-            int maxScroll = Math.max(0, this.contentHeight - (TREE_BOTTOM - TREE_TOP));
-            this.scroll = Math.max(0, Math.min(this.scroll, maxScroll));
-            return true;
-        }
-        return super.mouseScrolled(mouseX, mouseY, scrollX, scrollY);
-    }
-
-    /**
-     * 鼠标落在第几个义体槽上（-1 = 没有）。
-     *
-     * <p>{@code getHoveredSlot} 在 26.x 是私有的，所以这里按槽位坐标自己算。
-     */
-    private int implantSlotIndexAt(double mouseX, double mouseY) {
-        int count = Math.min(CyberwareStationMenu.IMPLANT_SLOT_COUNT, this.menu.slots.size());
-        for (int i = 0; i < count; i++) {
-            Slot slot = this.menu.slots.get(i);
-            int sx = this.leftPos + slot.x;
-            int sy = this.topPos + slot.y;
-            if (mouseX >= sx && mouseX < sx + 16 && mouseY >= sy && mouseY < sy + 16) {
-                return i;
-            }
-        }
-        return -1;
-    }
-
-    /** 选中某个义体槽：展开它对应的分类，并挑出第一个型号。 */
-    private void selectImplantSlot(int index) {
-        CyberwareSlot slot = CyberwareSlot.byIndexSafe(index);
-        this.expandedSlot = slot;
-        this.scroll = 0;
-        CyberwareDefinition first = firstOf(slot);
-        if (first != null) {
-            this.selectedDef = first;
-        }
-    }
-
-    private static boolean isInside(double mx, double my, int x, int y, int w, int h) {
-        return mx >= x && mx < x + w && my >= y && my < y + h;
-    }
-
-    private static CyberwareDefinition firstOf(CyberwareSlot slot) {
-        for (CyberwareDefinition def : CyberwareDefinitions.all().values()) {
-            if (def.slot() == slot) {
-                return def;
-            }
-        }
-        return null;
-    }
-
-    // ------------------------------------------------------------------
-    // 文案
-    // ------------------------------------------------------------------
 
     private static String statLabel(String key) {
         return switch (key) {

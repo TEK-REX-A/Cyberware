@@ -3,114 +3,62 @@ package com.dsh.cyberware.event;
 import com.dsh.cyberware.config.CyberwareConfig;
 import com.dsh.cyberware.core.DilationTickGate;
 import com.dsh.cyberware.core.TimeDilationManager;
+import java.util.HashMap;
+import java.util.Map;
 import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
+import net.minecraft.world.level.Level;
 
 /**
- * 时间减缓 · 服务端逻辑层 —— <b>位置回拉</b>（生物与投射物都用这一套）。
+ * 时间减缓 · 服务端逻辑层（Fabric 版）。
  *
- * <p>实体照常 tick，tick 结束后把它这一 tick 的**位移**按倍率缩回去：
- * <pre>
- *   p0 = (xo, yo, zo)        // tick 起始位置（vanilla 自己记的）
- *   p1 = (getX(), ...)       // tick 结束时位置
- *   setPos(p0 + (p1 - p0) * timeScale)
- * </pre>
- * 于是「停 4 刻、窜 1 刻」变成「每刻一小步」—— 客户端插值出来是连续的慢动作。
+ * <p><b>移植说明</b>：NeoForge 有「每实体每刻」的 {@code EntityTickEvent.Pre/Post}，
+ * Fabric 没有等价事件 —— 这里改成由 {@code ServerTickEvents.END_LEVEL_TICK} 每刻遍历一次
+ * 该维度的实体（{@link ServerLevel#getAllEntities()}），语义等价、代价是每刻一次迭代。
  *
- * <p><b>跳 tick 那一套已经全部拆掉了。</b>它对生物是顿挫的来源（位移跳变，客户端插值
- * 一步一顿），对投射物更是坏在另一处：客户端会<b>自己 tick 投射物</b>（按它自己的
- * {@code deltaMovement} 推进），服务端位置包只是事后校正 —— 服务端跳得再准，玩家看到的
- * 还是客户端那支原速的箭。现在改成：服务端位置回拉（连续小位移，包每刻都发，客户端插值平滑），
- * 客户端那边由 {@code ClientProjectileDilation} 把本地物理推进按住，位置只认服务端。
- *
- * <p>副作用与对策：
- * <ul>
- *   <li>AI / 寻路仍是原速决策 —— 它们会一直「想走却走不快」，这正是慢动作该有的样子。</li>
- *   <li>投射物箭程补偿：位移被缩了但寿命没变，会飞一半掉下来。这里把 {@code (1 - timeScale)}
- *       攒起来替它少老一刻，射程就回来了。</li>
- *   <li>载着玩家的坐骑不动 —— 否则玩家的视点会被每 tick 拽回去。</li>
- * </ul>
+ * <p><b>已知语义损失（未验证项，见报告）</b>：原版用 {@code EntityTickEvent.Pre#setCanceled(true)}
+ * 让投射物「整刻不 tick」（位置/碰撞/寿命一起慢）。Fabric 侧没有取消实体 tick 的公开钩子，
+ * 这里退化成「tick 结束后把位移整体抹掉」——位置对了，但**该刻的碰撞与寿命判定已经发生**。
+ * 要完全等价需要服务端 mixin（属渲染/mixin scope，本文件不涉及）。
  */
 public final class TimeDilationHandler {
 
     private TimeDilationHandler() {
     }
 
-    /** 上次刷新减速区域的游戏刻（每 20 刻刷一次）。 */
-    private static long lastRefreshTick = Long.MIN_VALUE;
+    /** 上次刷新减速区域的游戏刻（按维度记，避免多维度互相顶掉）。 */
+    private static final Map<ResourceKey<Level>, Long> LAST_REFRESH = new HashMap<>();
 
-    /**
-     * 参与减速的对象与豁免规则。
-     *
-     * <ul>
-     *   <li>玩家本人不受影响（位置由客户端权威，也不能拽）。</li>
-     *   <li>载着玩家的船 / 马 / 矿车豁免 —— 拉回去会把玩家的视点一起拽动。</li>
-     *   <li>生物与投射物参与。</li>
-     *   <li>玩家射出的投射物豁免：自己没慢、箭却慢了就本末倒置。</li>
-     * </ul>
-     */
-    private static boolean shouldAffect(Entity entity) {
-        if (!(entity instanceof LivingEntity)) {
-            return false;
+    /** 每刻末：每 20 刻刷新一次减速区域，然后逐实体处理。 */
+    public static void onLevelTickEnd(ServerLevel level) {
+        long gameTime = level.getGameTime();
+        Long last = LAST_REFRESH.get(level.dimension());
+        if (gameTime % 20L == 0L && (last == null || last.longValue() != gameTime)) {
+            LAST_REFRESH.put(level.dimension(), gameTime);
+            TimeDilationManager.refresh(level);
+            BerserkHandler.refresh(level);
         }
-        if (entity instanceof Player) {
-            return false;
-        }
-        return !(entity.getFirstPassenger() instanceof Player);
-    }
-
-    /**
-     * 投射物：跳 tick（时间真·不流逝）。这里是**唯一**还在跳 tick 的地方。
-     *
-     * <p>为什么投射物不能用位置回拉（主人实测的两个现象就是证据）：
-     * 箭的物理是「每刻走完这一 tick 的位移 + 沿途做碰撞」。回拉只改了**位置**，
-     * 改不掉 tick 内部已经走完的那 3 格 —— 于是箭在服务端该撞的照样撞、该插地的照样插地，
-     * 而同步出去的位置却停在起点。主人看到的「完全时停」是这么来的；
-     * 减速一结束，客户端追上服务端的真实落点，就是那下「瞬移」。
-     *
-     * <p>跳 tick 才是物理自洽的：整刻不执行 = 时间没流逝，位置、碰撞、寿命一起慢。
-     * 客户端那边由 {@code ClientProjectileDilation} 按住本地物理推进，位置只认服务端包。
-     */
-    public static void onEntityTickPre(EntityTickEvent.Pre event) {
-        Entity entity = event.getEntity();
-        if (entity.level().isClientSide()) {
-            return;
-        }
-        if (!(entity instanceof Projectile projectile)) {
-            return;
-        }
-        // 玩家自己射出的箭豁免：自己没慢、箭却慢了就本末倒置
-        if (projectile.getOwner() instanceof Player) {
-            return;
-        }
-        double timeScale = TimeDilationManager.timeScaleFor(entity);
-        if (DilationTickGate.shouldSkip(entity, timeScale)) {
-            event.setCanceled(true);
+        for (Entity entity : (Iterable<Entity>) level.getAllEntities()) {
+            tickEntity(entity);
         }
     }
 
-    public static void onEntityTick(EntityTickEvent.Post event) {
-        Entity entity = event.getEntity();
-
-        if (entity.level().isClientSide()) {
-            return;
-        }
-
-        // 周期性把减速区域挪到施法者脚下，并同步给客户端
-        long gameTime = entity.level().getGameTime();
-        if (gameTime % 20L == 0L && lastRefreshTick != gameTime) {
-            lastRefreshTick = gameTime;
-            TimeDilationManager.refresh(entity.level());
-            BerserkHandler.refresh(entity.level());
+    private static void tickEntity(Entity entity) {
+        // ---- 投射物：跳 tick 的降级实现（见类注释）----
+        if (entity instanceof Projectile projectile && !(projectile.getOwner() instanceof Player)) {
+            double projectileScale = TimeDilationManager.timeScaleFor(entity);
+            if (DilationTickGate.shouldSkip(entity, projectileScale)) {
+                entity.setPos(entity.xo, entity.yo, entity.zo);
+                return;
+            }
         }
 
         if (!shouldAffect(entity)) {
@@ -139,57 +87,60 @@ public final class TimeDilationHandler {
                       entity.zo + dz * timeScale);
     }
 
-    /**
-     * 子弹时间：斯安威斯坦激活期间，弹射物打不中你。
-     *
-     * <p>判定看两个位置：{@code getDirectEntity()} 是命中你的那个实体（箭矢、火球），
-     * {@code getEntity()} 是它的主人。两个都查，覆盖两种伤害源写法。
-     * 不想要就把配置里的 {@code projectileImmune} 关掉。
-     */
-    public static void onIncomingDamage(LivingIncomingDamageEvent event) {
-        if (event.getEntity().level().isClientSide()) {
-            return;
+    /** 参与减速的对象与豁免规则（与 NeoForge 版逐字一致）。 */
+    private static boolean shouldAffect(Entity entity) {
+        if (!(entity instanceof LivingEntity)) {
+            return false;
         }
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
+        if (entity instanceof Player) {
+            return false;
         }
-        if (!CyberwareConfig.TIME_DILATION_PROJECTILE_IMMUNE.get()) {
-            return;
-        }
-        if (!TimeDilationManager.isOwnDilationActive(player)) {
-            return;
-        }
-        DamageSource source = event.getSource();
-        boolean fromProjectile = source.getDirectEntity() instanceof Projectile
-                || source.getEntity() instanceof Projectile;
-        if (!fromProjectile) {
-            return;
-        }
-        event.setCanceled(true);
+        return !(entity.getFirstPassenger() instanceof Player);
     }
 
     /**
-     * 击杀延长：斯安威斯坦生效期间，玩家每击杀一个敌人就把持续时间往后推一段。
+     * 子弹时间：斯安威斯坦激活期间弹射物打不中你。
      *
-     * <p>只有「开减速的那个人自己」击杀才算 —— 队友杀敌不该给自己的义体续杯。
+     * <p>对应 NeoForge 的 {@code LivingIncomingDamageEvent#setCanceled} ——
+     * Fabric 侧用 {@code ServerLivingEntityEvents.ALLOW_DAMAGE} 返回 false。
      */
-    public static void onLivingDeath(LivingDeathEvent event) {
-        if (event.getEntity().level().isClientSide()) {
+    public static boolean allowDamage(LivingEntity entity, DamageSource source) {
+        if (!(entity instanceof ServerPlayer player)) {
+            return true;
+        }
+        if (!CyberwareConfig.TIME_DILATION_PROJECTILE_IMMUNE) {
+            return true;
+        }
+        if (!TimeDilationManager.isOwnDilationActive(player)) {
+            return true;
+        }
+        boolean fromProjectile = source.getDirectEntity() instanceof Projectile
+                || source.getEntity() instanceof Projectile;
+        return !fromProjectile;
+    }
+
+    /** 击杀延长（对应 NeoForge 的 {@code LivingDeathEvent}）。 */
+    public static void onLivingDeath(LivingEntity entity, DamageSource source) {
+        if (!CyberwareConfig.TIME_DILATION_KILL_EXTEND_ENABLED) {
             return;
         }
-        if (!CyberwareConfig.TIME_DILATION_KILL_EXTEND_ENABLED.get()) {
-            return;
-        }
-        Entity killer = event.getSource().getEntity();
-        if (!(killer instanceof ServerPlayer player) || event.getEntity() == player) {
+        Entity killer = source.getEntity();
+        if (!(killer instanceof ServerPlayer player) || entity == player) {
             return;
         }
         int added = TimeDilationManager.extend(player,
-                CyberwareConfig.TIME_DILATION_KILL_EXTEND_TICKS.get(),
-                CyberwareConfig.TIME_DILATION_KILL_EXTEND_LIMIT.get());
+                CyberwareConfig.TIME_DILATION_KILL_EXTEND_TICKS,
+                CyberwareConfig.TIME_DILATION_KILL_EXTEND_LIMIT);
         if (added > 0) {
             player.sendOverlayMessage(Component.literal("斯安威斯坦 +" + trimSeconds(added) + "s")
                     .withStyle(ChatFormatting.AQUA));
+            // 击杀音效（新功能）：added > 0 就证明击杀发生时玩家处于减速中，
+            // 在尸体位置广播，附近玩家都能听到。
+            if (player.level() instanceof net.minecraft.server.level.ServerLevel serverLevel) {
+                serverLevel.playSound(null, entity.getX(), entity.getY(), entity.getZ(),
+                        com.dsh.cyberware.registry.ModSounds.SANDEVISTAN_KILL.get(),
+                        net.minecraft.sounds.SoundSource.PLAYERS, 1.0F, 1.0F);
+            }
         }
     }
 

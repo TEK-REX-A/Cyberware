@@ -3,11 +3,11 @@ package com.dsh.cyberware.client;
 import com.dsh.cyberware.Cyberware;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 /**
  * 狂暴 HUD —— 与斯安威斯坦同款的<b>竖向</b>细进度条，暖灰。
@@ -47,8 +47,15 @@ public final class BerserkHud {
     private BerserkHud() {
     }
 
-    public static void onRenderGui(RenderGuiEvent.Post event) {
-        if (!BerserkClientState.active()) {
+    /**
+     * Fabric HUD 入口 —— 对应 {@code HudElement} 的唯一抽象方法
+     * {@code extractRenderState(GuiGraphicsExtractor, DeltaTracker)}（本机实测，fabric-rendering-v1-23.3.1）。
+     *
+     * <p>替代原来的 NeoForge {@code RenderGuiEvent.Post}。注册（由客户端初始化器负责）：
+     * {@code HudElementRegistry.addLast(Identifier, BerserkHud::extractRenderState)}。
+     */
+    public static void extractRenderState(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
+        if (g == null || !BerserkClientState.active()) {
             return;
         }
         float progress = BerserkClientState.progress();
@@ -56,7 +63,6 @@ public final class BerserkHud {
             return;
         }
 
-        GuiGraphicsExtractor g = event.getGuiGraphics();
         Font font = Minecraft.getInstance().font;
         int yBottom = g.guiHeight() - BAR_BOTTOM_GAP;
 

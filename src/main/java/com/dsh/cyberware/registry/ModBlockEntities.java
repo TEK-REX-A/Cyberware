@@ -3,29 +3,32 @@ package com.dsh.cyberware.registry;
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.block.CyberwareStationBlockEntity;
 import java.util.Set;
-import net.minecraft.core.registries.Registries;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 import net.minecraft.world.level.block.entity.BlockEntityType;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.fabricmc.fabric.api.object.builder.v1.block.entity.FabricBlockEntityTypeBuilder;
 
 /**
  * 方块实体注册表。
  *
- * <p>注意：26.x 的 NeoForge 已移除 {@code DeferredRegister$BlockEntities}，这里用通用
- * {@code DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, ...)}。
- * {@code BlockEntityType} 的构造在 NeoForge 里由 access transformer 开放为 public，
- * 所以可以直接 {@code new}。
+ * <p>⚠ {@code new BlockEntityType<>(...)} 的构造在 NeoForge 里由 access transformer 开放为
+ * public；Fabric 没有 AT，这里能否直接 new <b>未验证</b> —— 若编译报不可见，需要改用
+ * accessWidener（{@code fabric.mod.json} 的 {@code accessWidener} 字段）。
  */
 public final class ModBlockEntities {
 
-    public static final DeferredRegister<BlockEntityType<?>> BLOCK_ENTITIES =
-            DeferredRegister.create(Registries.BLOCK_ENTITY_TYPE, Cyberware.MODID);
-
-    public static final DeferredHolder<BlockEntityType<?>, BlockEntityType<CyberwareStationBlockEntity>> CYBERWARE_STATION =
-            BLOCK_ENTITIES.register("cyberware_station", () -> new BlockEntityType<>(
-                    CyberwareStationBlockEntity::new,
-                    Set.of(ModBlocks.CYBERWARE_STATION.get())));
+    public static RegistryHolder<BlockEntityType<CyberwareStationBlockEntity>> CYBERWARE_STATION;
 
     private ModBlockEntities() {
+    }
+
+    public static void register() {
+        CYBERWARE_STATION = new RegistryHolder<>(Registry.register(
+                BuiltInRegistries.BLOCK_ENTITY_TYPE,
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "cyberware_station"),
+                FabricBlockEntityTypeBuilder.create(
+                        CyberwareStationBlockEntity::new,
+                        ModBlocks.CYBERWARE_STATION.get()).build()));
     }
 }

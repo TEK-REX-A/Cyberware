@@ -4,75 +4,76 @@ import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.core.CyberwareInstallation;
 import com.dsh.cyberware.core.OverclockState;
 import com.dsh.cyberware.core.RamState;
-import com.dsh.cyberware.core.RamSystem;
-import net.neoforged.neoforge.attachment.AttachmentType;
-import net.neoforged.neoforge.common.NeoForge;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
-import net.neoforged.neoforge.registries.NeoForgeRegistries;
+import com.dsh.cyberware.core.ShieldState;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentRegistry;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentSyncPredicate;
+import net.fabricmc.fabric.api.attachment.v1.AttachmentType;
+import net.minecraft.resources.Identifier;
 
 /**
  * 数据附件注册表 —— 把「玩家身上的义体表 / RAM / 超频状态」挂到每个玩家身上。
  *
- * <p>NeoForge 26.x 用 AttachmentType 取代了旧的 Capability。选它而不是自己存 NBT，
- * 是因为这几件事全都白送：
- * <ul>
- *   <li>{@code serialize} —— 存档持久化（MapCodec）</li>
- *   <li>{@code copyOnDeath} —— 死亡后不掉义体，复活仍是改造人</li>
- *   <li>{@code sync} —— 自动同步到客户端（义眼要在客户端判断该不该描边）</li>
- * </ul>
+ * <p>NeoForge 用 {@code AttachmentType}，Fabric 用 fabric-data-attachment-api 的
+ * {@code AttachmentRegistry}：四件事（持久化 persistent / 死亡拷贝 copyOnDeath /
+ * 默认值 initializer / 客户端同步 syncWith）一一对应。
+ *
+ * <p>⚠ 本文件的签名是<b>按 jar 方法表推断</b>的（persistent 收 {@code Codec}、
+ * syncWith 收 {@code (StreamCodec, AttachmentSyncPredicate)}、targetOnly() 无参）——
+ * 未编译验证。项目的 {@code CODEC} 是 {@code MapCodec}，所以这里要 {@code .codec()} 转换。
  */
 public final class ModAttachments {
 
-    public static final DeferredRegister<AttachmentType<?>> ATTACHMENTS =
-            DeferredRegister.create(NeoForgeRegistries.Keys.ATTACHMENT_TYPES, Cyberware.MODID);
-
     /** 玩家身上的义体表 */
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<CyberwareInstallation>> INSTALLATION =
-            ATTACHMENTS.register("installation",
-                    () -> AttachmentType.builder(() -> CyberwareInstallation.EMPTY)
-                            .serialize(CyberwareInstallation.CODEC)
-                            .copyOnDeath()
-                            .sync(CyberwareInstallation.STREAM_CODEC)
-                            .build());
+    public static RegistryHolder<AttachmentType<CyberwareInstallation>> INSTALLATION;
+
+    /** 玩家 RAM（{@code cyberware:ram}） */
+    public static RegistryHolder<AttachmentType<RamState>> RAM;
+
+    /** 脑机超频状态（{@code cyberware:overclock}），不 copyOnDeath */
+    public static RegistryHolder<AttachmentType<OverclockState>> OVERCLOCK;
 
     /**
-     * 玩家 RAM（{@code cyberware:ram}）—— 脑机超频 / 快速破解的资源。
+     * 玩家护盾（{@code cyberware:shield}）。
      *
-     * <p>与 {@link #INSTALLATION} 完全同款：MapCodec 落盘（{@link RamState#CODEC}）、
-     * {@code copyOnDeath}（复活带着自己的 RAM 值）、StreamCodec 自动同步
-     * （{@link RamState#STREAM_CODEC}）。{@code max} / {@code regenPerMinute} 是派生值，不落盘。
+     * <p>持久化 + <b>不</b> copyOnDeath（死亡就该清零，见 {@code ShieldSystem#onDeath}）。
+     * 同 RAM / 安装表一样走自建网络包同步（{@code ShieldPayload}），不用 {@code .syncWith(...)}。
      */
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<RamState>> RAM =
-            ATTACHMENTS.register("ram",
-                    () -> AttachmentType.builder(() -> RamState.EMPTY)
-                            .serialize(RamState.CODEC)
-                            .copyOnDeath()
-                            .sync(RamState.STREAM_CODEC)
-                            .build());
-
-    /**
-     * 脑机超频状态（{@code cyberware:overclock}）。
-     *
-     * <p>不 {@code copyOnDeath}：复活不该白带一次超频中状态（冷却时刻倒是跟着走，无害）。
-     * 时刻用服务端全局 tick 计数，见 {@link OverclockState} 的类注释。
-     */
-    public static final DeferredHolder<AttachmentType<?>, AttachmentType<OverclockState>> OVERCLOCK =
-            ATTACHMENTS.register("overclock",
-                    () -> AttachmentType.builder(() -> OverclockState.IDLE)
-                            .serialize(OverclockState.CODEC)
-                            .sync(OverclockState.STREAM_CODEC)
-                            .build());
-
-    static {
-        // RAM 恢复 / 超频倒计时的服务端每刻推进（core/RamSystem）。
-        //
-        // 用**显式注册**而不是类上的 @EventBusSubscriber 注解：注解漏扫会静默失效，
-        // 而静默失效正是这个项目吃过亏的地方（要等主人真机才发现）。
-        // 这个静态块随本类初始化执行，而本类在 Cyberware 构造器里被引用（ATTACHMENTS.register）。
-        NeoForge.EVENT_BUS.addListener(RamSystem::onPlayerTick);
-    }
+    public static RegistryHolder<AttachmentType<ShieldState>> SHIELD;
 
     private ModAttachments() {
+    }
+
+    public static void register() {
+        // 注意：这里**不能**用 .syncWith(...)。
+        // Fabric 的 attachment 同步实现（AttachmentSync）静态初始化时走 netty 的 ByteBufUtil，
+        // 而 netty 在 Android 上 setAccessible(true) 被禁 → UnsupportedOperationException，
+        // 整个 Entrypoint 直接炸（真机实测：debug.log 里 AttachmentRegistry.create -> byteBufUtil -> 反射失败）。
+        // 数据同步改走自定义网络包（RamPayload / OverclockPayload 等），效果等价。
+        INSTALLATION = new RegistryHolder<>(AttachmentRegistry.create(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "installation"),
+                builder -> builder
+                        .initializer(() -> CyberwareInstallation.EMPTY)
+                        .persistent(CyberwareInstallation.CODEC.codec())
+                        .copyOnDeath()));
+
+        RAM = new RegistryHolder<>(AttachmentRegistry.create(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "ram"),
+                builder -> builder
+                        .initializer(() -> RamState.EMPTY)
+                        .persistent(RamState.CODEC.codec())
+                        .copyOnDeath()));
+
+        OVERCLOCK = new RegistryHolder<>(AttachmentRegistry.create(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "overclock"),
+                builder -> builder
+                        .initializer(() -> OverclockState.IDLE)
+                        .persistent(OverclockState.CODEC.codec())));
+
+        // 护盾：持久化，但**不** copyOnDeath（死亡清零由 ShieldSystem.onDeath 负责）
+        SHIELD = new RegistryHolder<>(AttachmentRegistry.create(
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "shield"),
+                builder -> builder
+                        .initializer(() -> ShieldState.EMPTY)
+                        .persistent(ShieldState.CODEC)));
     }
 }

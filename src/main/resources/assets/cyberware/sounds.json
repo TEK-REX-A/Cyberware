@@ -4,5 +4,11 @@
     "sounds": [
       "cyberware:sandevistan_activate"
     ]
+  },
+  "sandevistan_kill": {
+    "subtitle": "cyberware.subtitle.sandevistan_kill",
+    "sounds": [
+      "cyberware:sandevistan_kill"
+    ]
   }
 }

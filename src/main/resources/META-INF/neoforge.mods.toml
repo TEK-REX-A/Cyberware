@@ -7,7 +7,7 @@ issueTrackerURL = "https://github.com/TEK-REX-A/Cyberware/issues"
 modId = "cyberware"
 version = "${version}"
 displayName = "Cyberware 义体系统"
-authors = "Neko"
+authors = "TEK_REX, Neko"
 description = '''
 赛博朋克风格义体植入系统：义体容量、义体操作台、植入体界面、稀有度与升级。
 

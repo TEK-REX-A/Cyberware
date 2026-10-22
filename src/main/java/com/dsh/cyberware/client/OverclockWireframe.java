@@ -16,7 +16,6 @@ import net.minecraft.client.renderer.rendertype.RenderTypes;
 import net.minecraft.client.renderer.texture.OverlayTexture;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
 
 /**
  * 脑机超频持续期：<b>生物荧光轮廓化</b>（t25，P0）。
@@ -61,9 +60,10 @@ public final class OverclockWireframe {
     }
 
     @SuppressWarnings({"unchecked", "rawtypes"})
-    public static void onRenderLiving(RenderLivingEvent.Post<?, ?, ?> event) {
+    public static void onSubmitPost(LivingEntityRenderState state, PoseStack poseStack,
+                                    SubmitNodeCollector submitCollector, LivingEntityRenderer renderer) {
         try {
-            render(event);
+            render(state, poseStack, submitCollector, renderer);
         } catch (Throwable t) {
             if (FAIL_LOGGED.compareAndSet(false, true)) {
                 Cyberware.LOGGER.warn("[cyberware] 超频轮廓渲染异常（已忽略，不影响游戏）", t);
@@ -71,7 +71,8 @@ public final class OverclockWireframe {
         }
     }
 
-    private static void render(RenderLivingEvent.Post<?, ?, ?> event) {
+    private static void render(LivingEntityRenderState state, PoseStack poseStack,
+                               SubmitNodeCollector submitCollector, LivingEntityRenderer renderer) {
         if (!RamClientState.overclockActive()) {
             return;
         }
@@ -80,7 +81,6 @@ public final class OverclockWireframe {
         if (self == null) {
             return;
         }
-        LivingEntityRenderState state = event.getRenderState();
         if (state == null || state.isInvisible) {
             return;
         }
@@ -109,10 +109,8 @@ public final class OverclockWireframe {
         int rgb = isPlayer ? MAGENTA : GREEN;
         int color = ARGB.color(ALPHA, (rgb >> 16) & 0xFF, (rgb >> 8) & 0xFF, rgb & 0xFF);
 
-        LivingEntityRenderer renderer = (LivingEntityRenderer) event.getRenderer();
         LivingEntityRendererAccessor accessor = (LivingEntityRendererAccessor) renderer;
-        PoseStack poseStack = event.getPoseStack();
-        SubmitNodeCollector collector = event.getSubmitNodeCollector();
+        SubmitNodeCollector collector = submitCollector;
         if (poseStack == null || collector == null) {
             return;
         }

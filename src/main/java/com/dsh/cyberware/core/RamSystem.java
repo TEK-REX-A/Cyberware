@@ -2,9 +2,9 @@ package com.dsh.cyberware.core;
 
 import com.dsh.cyberware.network.RamPayload;
 import com.dsh.cyberware.registry.ModAttachments;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.event.tick.PlayerTickEvent;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 /**
  * RAM System · 服务端推进器（每刻跑一次，只服务端）。
@@ -41,15 +41,14 @@ public final class RamSystem {
     }
 
     /** 服务端每刻入口（注册见类注释）。 */
-    public static void onPlayerTick(PlayerTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
-        }
-        boolean changed = settleRam(player);
-        changed |= OverclockSystem.tick(player);
-        HackSystem.tick(player);   // 上传按刻计时（t24）
-        if (changed || shouldResyncOverclock(player)) {
-            sync(player);
+    public static void onPlayerTick(MinecraftServer server) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            boolean changed = settleRam(player);
+            changed |= OverclockSystem.tick(player);
+            HackSystem.tick(player);   // 上传按刻计时（t24）
+            if (changed || shouldResyncOverclock(player)) {
+                sync(player);
+            }
         }
     }
 
@@ -108,7 +107,7 @@ public final class RamSystem {
         double max = CyberwareStats.maxRam(player);
         double current = RamState.of(player).current();
         boolean overclock = OverclockState.of(player).isActive(OverclockSystem.serverTicks(player));
-        PacketDistributor.sendToPlayer(player, new RamPayload(
+        ServerPlayNetworking.send(player, new RamPayload(
                 current,
                 max,
                 CyberwareStats.regenPerMinute(player),

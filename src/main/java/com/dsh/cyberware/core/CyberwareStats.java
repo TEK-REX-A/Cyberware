@@ -1,5 +1,6 @@
 package com.dsh.cyberware.core;
 
+import com.dsh.cyberware.config.CyberwareConfig;
 import com.dsh.cyberware.data.CyberwareData;
 import java.util.ArrayList;
 import java.util.List;
@@ -113,6 +114,36 @@ public final class CyberwareStats {
      */
     public static double regenPerMinute(Player player) {
         return BASE_RAM_REGEN + sum(player, CyberwareDefinition.Stats.RAM_REGEN);
+    }
+
+    // ═══════════════════ 护盾（2026-10-22 主人 + Friend） ═══════════════════
+
+    /**
+     * 护盾上限 = {@code max(0, Σ Stats.SHIELD)}。
+     *
+     * <p><b>没有基线</b>（不像 RAM 有 12 点裸机值）：护盾<b>完全由义体提供</b>，
+     * 一件都没装就是 0，也就是「没有护盾条」。这是主人定的规则 1。
+     *
+     * <p>求和用 {@link #sum}，所以每件按<b>它自己那一档稀有度</b>取值 ——
+     * 将来给同一型号不同稀有度配不同护盾量会自动生效。
+     */
+    public static double maxShield(Player player) {
+        return Math.max(0.0D, sum(player, CyberwareDefinition.Stats.SHIELD));
+    }
+
+    /**
+     * 每秒护盾恢复量 = 基础值（配置 {@code shield.baseRegenPerSecond}，默认 3）
+     * + {@code Σ Stats.SHIELD_REGEN}。
+     *
+     * <p><b>基础值走配置</b>（{@link CyberwareConfig#SHIELD_BASE_REGEN_PER_SECOND}），
+     * 不硬编码在逻辑里 —— 主人要调「3/s」这个基准不用改代码。
+     *
+     * <p>夹到 0 以上：某件义体给负的恢复速率（掉盾副作用）时，
+     * 「当前值」由 {@link ShieldState} 夹住，这里如实返回（可以为 0 = 完全不恢复）。
+     */
+    public static double shieldRegenPerSecond(Player player) {
+        return Math.max(0.0D, CyberwareConfig.SHIELD_BASE_REGEN_PER_SECOND
+                + sum(player, CyberwareDefinition.Stats.SHIELD_REGEN));
     }
 
     /**

@@ -1,5 +1,6 @@
 package com.dsh.cyberware.client;
 
+import com.dsh.cyberware.core.CyberwareInstallation;
 import com.dsh.cyberware.network.HackPayload;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -128,6 +129,58 @@ public final class HackClientState {
         return noteAtMs;
     }
 
+    // ═══════════════════ 义眼前置（锁定框的唯一开关） ═══════════════════
+
+    /**
+     * 义眼型号的前缀。与服务端 {@code core/HackSystem.hasKiroshiOptics} 的口径<b>逐字一致</b>
+     * （前缀匹配，不写死某几个 id —— 官方命名里有 {@code kiroshi_optics_bare/_combined/_hunter/_wallhack} 等变体）。
+     * 客户端必须用服务端同一套「什么算义眼」的定义，否则会出现「服务端允许扫描、客户端不画框」或反过来。
+     */
+    private static final String[] OPTICS_PREFIXES = {
+            "kiroshi_",
+            "iconic_advanced_kiroshi"
+    };
+
+    /** 义眼判定读数据异常只报一次（不刷屏） */
+    private static final java.util.concurrent.atomic.AtomicBoolean OPTICS_FAIL_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+
+    /**
+     * 本地玩家装没装歧路司义眼 —— <b>屏幕锁定框的唯一开关</b>。
+     *
+     * <p><b>为什么要在这里判一次</b>：服务端（{@code HackSystem}）只在 SCAN/CAST 时才检查义眼，
+     * 而锁定框是<b>客户端每 tick 自己算</b>、<b>每帧自己画</b>的；不在这里挡一道，
+     * 没装义眼的玩家世界里照样有框。
+     *
+     * <p><b>数据源</b>：{@code CyberwareInstallation.of(LocalPlayer)} —— 与服务端写入的
+     * {@code ModAttachments.INSTALLATION} 是<b>同一张附件表</b>（走 core 侧查询 API，本类不碰存储层）。
+     * 客户端能不能真的读到已装义体取决于存储层的同步（另一条线在修）；本处<b>只读</b>。
+     * 读不到时返回 false —— 宁可不画框，也不能给没装义眼的玩家画框。
+     */
+    public static boolean hasOptics() {
+        try {
+            Minecraft minecraft = Minecraft.getInstance();
+            LocalPlayer self = minecraft == null ? null : minecraft.player;
+            if (self == null) {
+                return false;
+            }
+            for (String id : CyberwareInstallation.of(self).installed().keySet()) {
+                for (String prefix : OPTICS_PREFIXES) {
+                    if (id != null && id.startsWith(prefix)) {
+                        return true;
+                    }
+                }
+            }
+        } catch (Throwable t) {
+            // 数据层尚未就绪（例如附件表未注册）不能让每 tick / 每帧回调炸掉
+            if (OPTICS_FAIL_LOGGED.compareAndSet(false, true)) {
+                com.dsh.cyberware.Cyberware.LOGGER.warn(
+                        "[cyberware] 义眼判定读数据失败，锁定框按「未装义眼」处理", t);
+            }
+        }
+        return false;
+    }
+
     // ═══════════════════ 锁定：每 tick 选一次（不在每帧做，帧率自保） ═══════════════════
 
     /**
@@ -155,6 +208,13 @@ public final class HackClientState {
         Minecraft minecraft = Minecraft.getInstance();
         LocalPlayer self = minecraft.player;
         if (self == null || minecraft.level == null || !self.isAlive()) {
+            clearLock();
+            return;
+        }
+        // 【义眼前置】没装歧路司义眼就不选锁定目标 ——
+        // 原实现在这里没有任何前置判断：只要屏幕中心 10%、≤20 格内有活体就锁定成功，
+        // 于是 HackHud.drawLockFrame 每帧照画 —— 这就是「没装义眼也显示目标选定框」。
+        if (!hasOptics()) {
             clearLock();
             return;
         }

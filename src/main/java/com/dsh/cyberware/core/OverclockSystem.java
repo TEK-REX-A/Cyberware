@@ -4,7 +4,7 @@ import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.network.OverclockPayload;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 /**
  * 脑机超频 · 服务端状态机。
@@ -109,7 +109,7 @@ public final class OverclockSystem {
         }
         long now = serverTicks(player);
         OverclockState state = read(player, now);
-        PacketDistributor.sendToPlayer(player, new OverclockPayload(
+        ServerPlayNetworking.send(player, new OverclockPayload(
                 OverclockPayload.Action.STATE,
                 state.isActive(now),
                 state.remainingTicks(now),

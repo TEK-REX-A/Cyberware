@@ -1,7 +1,7 @@
 package com.dsh.cyberware.client;
 
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 /**
  * 屏幕色调 + 暗角。
@@ -31,13 +31,19 @@ public final class SandevistanOverlay {
     private SandevistanOverlay() {
     }
 
-    public static void onRenderGui(RenderGuiEvent.Post event) {
+    /**
+     * Fabric HUD 入口 —— 对应 {@code HudElement} 的唯一抽象方法
+     * {@code extractRenderState(GuiGraphicsExtractor, DeltaTracker)}（本机实测，fabric-rendering-v1-23.3.1）。
+     *
+     * <p>替代原来的 NeoForge {@code RenderGuiEvent.Post}。注册（由客户端初始化器负责）：
+     * {@code HudElementRegistry.addLast(Identifier, SandevistanOverlay::extractRenderState)}。
+     */
+    public static void extractRenderState(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
         float dilation = ClientTimeDilation.ratioNow();
         float berserk = BerserkClientState.intensity();
-        if (dilation <= 0.01F && berserk <= 0.01F) {
+        if (g == null || (dilation <= 0.01F && berserk <= 0.01F)) {
             return;
         }
-        GuiGraphicsExtractor g = event.getGuiGraphics();
         int w = g.guiWidth();
         int h = g.guiHeight();
         if (w <= 0 || h <= 0) {

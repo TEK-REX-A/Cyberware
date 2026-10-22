@@ -4,10 +4,10 @@ import com.dsh.cyberware.Cyberware;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.LivingEntity;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 /**
  * 三步客户端 HUD（t29）：<b>屏幕空间折角锁定框</b> + <b>上传进度条</b> + 提示条。
@@ -53,9 +53,15 @@ public final class HackHud {
     private HackHud() {
     }
 
-    public static void onRenderGui(RenderGuiEvent.Post event) {
+    /**
+     * Fabric HUD 入口 —— 对应 {@code HudElement} 的唯一抽象方法
+     * {@code extractRenderState(GuiGraphicsExtractor, DeltaTracker)}（本机实测，fabric-rendering-v1-23.3.1）。
+     *
+     * <p>替代原来的 NeoForge {@code RenderGuiEvent.Post}。注册（由客户端初始化器负责）：
+     * {@code HudElementRegistry.addLast(Identifier, HackHud::extractRenderState)}。
+     */
+    public static void extractRenderState(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
         try {
-            GuiGraphicsExtractor g = event.getGuiGraphics();
             if (g == null) {
                 return;
             }
@@ -72,6 +78,12 @@ public final class HackHud {
     // ═══════════════════ 折角锁定框 ═══════════════════
 
     private static void drawLockFrame(GuiGraphicsExtractor g) {
+        // 【义眼前置】没装义眼一律不画框 —— 最后一道闸：
+        // 即使锁定状态被别的路径（服务端下行 LOCKED）置上，没义眼也不出框。
+        // 与 HackClientState.tickLockInternal() 里的闸是同一个判定（hasOptics()）。
+        if (!HackClientState.hasOptics()) {
+            return;
+        }
         LivingEntity target = HackClientState.lockedEntity();
         if (target == null) {
             // 没有目标/目标失效 → 立刻不做任何事（无残留、零分配）

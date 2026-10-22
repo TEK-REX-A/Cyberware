@@ -289,7 +289,8 @@ public final class CyberwareDefinitions {
             "iconic_chiton", "几质丁壳", CyberwareSlot.INTEGUMENTARY, true,
             "cyberware:item/iconic_chiton",
             "提供护甲：140~200 转基因几丁质制作的皮下壳层，极其坚固。提供额外的生命值恢复。 肉体调幅：每一点属性值+10%生命值恢复速率。",
-            List.of(variant(CyberwareRarity.MYTHIC, 40, stats(Stats.ARMOR, 200)))));
+            List.of(variant(CyberwareRarity.MYTHIC, 40, stats(
+                    Stats.ARMOR, 200, Stats.SHIELD, 40, Stats.SHIELD_REGEN, 1.0D)))));
 
     /** 外周逆反 · 表皮系统 */
     public static final CyberwareDefinition ICONIC_PROXIMITY_REDUCER = register(new CyberwareDefinition(
@@ -621,9 +622,9 @@ public final class CyberwareDefinitions {
             "扫描时高亮12.5~19.5米内的敌人，效果持续60秒。 扫描或瞄准时6~10倍光学变焦。 镇定调幅：每一点属性值+0.2%爆头和弱点伤害。",
             List.of(variant(CyberwareRarity.LEGENDARY, 8, stats()))));
 
-    /** 智能连接 · 胳臂 */
+    /** 智能连接 · 手掌（2026-10-22 从 ARMS 挪到 HAND：它是手掌里的神经接口，不是整条手臂） */
     public static final CyberwareDefinition SMART_LINK = register(new CyberwareDefinition(
-            "smart_link", "智能连接", CyberwareSlot.ARMS, true,
+            "smart_link", "智能连接", CyberwareSlot.HAND, true,
             "cyberware:item/smart_link",
             "可以在智能武器上使用智能瞄准。 +10%~20%目标锁定持续时间 智能武器+5%~15%暴击伤害 将使用者的光学植入体和武器系统直接连接，提供实时武器信息。 +1~2最大RAM 智力调幅：每一点属性值+0.1%智能武器伤害。",
             List.of(variant(CyberwareRarity.LEGENDARY, 4, stats(Stats.RAM, 2, Stats.CRIT_DAMAGE, 15)))));
@@ -798,7 +799,8 @@ public final class CyberwareDefinitions {
             "boring_plating", "皮下护甲", CyberwareSlot.INTEGUMENTARY, true,
             "cyberware:item/boring_plating",
             "提供护甲：17~49 就是护甲。没那么多花样，但是管用。 技术调幅：每一点属性值+0.5护甲。",
-            List.of(variant(CyberwareRarity.LEGENDARY, 4, stats(Stats.ARMOR, 49)))));
+            List.of(variant(CyberwareRarity.LEGENDARY, 4, stats(
+                    Stats.ARMOR, 49, Stats.SHIELD, 20, Stats.SHIELD_REGEN, 0.5D)))));
 
     /** 近接防盾 · 表皮系统 */
     public static final CyberwareDefinition PROXIMITY_REDUCER = register(new CyberwareDefinition(
@@ -833,7 +835,8 @@ public final class CyberwareDefinitions {
             "sudden_aid", "反制壳层", CyberwareSlot.INTEGUMENTARY, true,
             "cyberware:item/sudden_aid",
             "提供护甲：17~57 如果在3秒内失去35%生命值，+30~50%半伤几率，持续4秒。 冷却时间：6秒 反应调幅：每一点属性值+0.1%暴击率。",
-            List.of(variant(CyberwareRarity.LEGENDARY, 10, stats(Stats.ARMOR, 57)))));
+            List.of(variant(CyberwareRarity.LEGENDARY, 10, stats(
+                    Stats.ARMOR, 57, Stats.SHIELD, 25, Stats.SHIELD_REGEN, 1.5D)))));
 
     /** 震慑通电 · 表皮系统 */
     public static final CyberwareDefinition ELECTROSHOCK_MECHANISM = register(new CyberwareDefinition(
@@ -963,7 +966,8 @@ public final class CyberwareDefinitions {
             "endoskeleton", "再造骨骼", CyberwareSlot.SKELETON, true,
             "cyberware:item/endoskeleton",
             "提供护甲：96~186 +10%+15%最大生命值 肉体调幅：每一点属性值+0.5生命值。",
-            List.of(variant(CyberwareRarity.LEGENDARY, 32, stats(Stats.ARMOR, 186, Stats.MAX_HEALTH, 15)))));
+            List.of(variant(CyberwareRarity.LEGENDARY, 32, stats(
+                    Stats.ARMOR, 186, Stats.MAX_HEALTH, 15, Stats.SHIELD, 15)))));
 
     /** RAM补偿 · 骨骼 */
     public static final CyberwareDefinition COMPILING_SKELETON = register(new CyberwareDefinition(

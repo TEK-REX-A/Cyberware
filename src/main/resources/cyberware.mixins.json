@@ -2,7 +2,11 @@
   "required": true,
   "minVersion": "0.8.5",
   "package": "com.dsh.cyberware.mixin",
-  "compatibilityLevel": "JAVA_21",
+  "compatibilityLevel": "JAVA_25",
+  "mixins": [
+    "EntityTickMixin",
+    "ShieldDamageMixin"
+  ],
   "client": [
     "client.PostChainAccessor",
     "client.PostPassAccessor",
@@ -10,11 +14,16 @@
     "client.SoundEngineMixin",
     "client.ParticleMixin",
     "client.WeatherEffectRendererMixin",
-    "client.GameRendererMixin",
     "client.LivingEntityRendererAccessor",
-    "client.EquipmentLayerRendererMixin",
+    "client.EntityRendererOutlineMixin",
+    "client.ClientEntityTickMixin",
+    "client.AbstractClientPlayerMixin",
+    "client.EntityTickSkipMixin",
     "client.CapeLayerMixin",
-    "client.EntityRendererOutlineMixin"
+    "client.EquipmentLayerRendererMixin",
+    "client.GameRendererMixin",
+    "client.LivingEntityRendererMixin",
+    "client.ProjectileMixin"
   ],
   "injectors": {
     "defaultRequire": 1

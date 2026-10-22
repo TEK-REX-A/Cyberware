@@ -1,11 +1,35 @@
 plugins {
-    id 'java'
-    id 'net.neoforged.moddev' version '2.0.147'
+    id 'fabric-loom' version '1.19.1'
 }
 
-group = 'com.dsh.cyberware'
 version = '0.5.3-Beta'
-description = 'Cyberware - 赛博朋克风格义体植入系统'
+group = 'com.dsh.cyberware'
+description = 'Cyberware - 赛博朋克风格义体植入系统 (26.1.2 Fabric)'
+
+base {
+    archivesName = 'cyberware'
+}
+
+repositories {
+    maven { url = 'https://maven.fabricmc.net/' }
+    mavenCentral()
+}
+
+dependencies {
+    minecraft "com.mojang:minecraft:26.1.2"
+    // 26.1.2 官方不发布 client_mappings（客户端 jar 本身不混淆），yarn/intermediary 也没有该版本。
+    // 所以用「恒等映射」：类名不变。⚠ 必须是 jar，裸 .tiny 会让 Loom 报 Provider "jar" not found。
+    // 生成方法见 Cyberware-Fabric-构建阻塞.md 第二节。
+    mappings files("/root/cyberware-build/identity-mappings.jar")
+    modImplementation "net.fabricmc:fabric-loader:0.19.5"
+    modImplementation "net.fabricmc.fabric-api:fabric-api:0.155.3+26.1.2"
+
+    // MixinExtras：@WrapOperation 等注入器需要它的注解与 API。
+    // 只用于**编译期** —— 运行时由 Fabric API 的 JiJ 提供（实测真机是 0.5.4，
+    // 其 WrapOperation 注解形状与 0.5.5 一致，不存在版本不兼容）。
+    // ⚠ 不要改成 include：那会多一步 JIJ 重映射，且当前没必要。
+    compileOnly "io.github.llamalad7:mixinextras-fabric:0.5.5"
+}
 
 java {
     toolchain {
@@ -13,33 +37,18 @@ java {
     }
 }
 
-neoForge {
-    version = '26.1.2.109'
-
-    runs {
-        client {
-            client()
-        }
-        server {
-            server()
-        }
-    }
-
-    mods {
-        cyberware {
-            sourceSet sourceSets.main
-        }
-    }
-}
-
 tasks.withType(JavaCompile).configureEach {
     options.encoding = 'UTF-8'
+    options.release = 25
 }
 
-// 把真实版本号展开进 mod 元数据 —— 之前是写死的，游戏里永远显示 0.3.0-Beta
-tasks.named('processResources') {
+processResources {
     inputs.property 'version', project.version
-    filesMatching('META-INF/neoforge.mods.toml') {
+    filesMatching('fabric.mod.json') {
         expand 'version': project.version
     }
+    // 别把备份和 NeoForge 时代的元数据打进 Fabric 包
+    // （之前 cyberware.mixins.json.bak / META-INF/neoforge.mods.toml 被原样塞进了 jar）
+    exclude '**/*.bak', '**/*.bak-*', '**/*.orig', '**/*.rej'
+    exclude 'META-INF/neoforge.mods.toml', 'META-INF/neoforge.mods.toml.*', 'META-INF/mods.toml'
 }

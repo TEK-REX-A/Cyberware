@@ -9,7 +9,6 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.entity.state.ArmedEntityRenderState;
 import net.minecraft.client.renderer.entity.state.LivingEntityRenderState;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
 
 /**
  * 时间减缓 · 客户端状态与渲染层。
@@ -244,14 +243,23 @@ public final class ClientTimeDilation {
                 && Math.abs(state.z - p.z) < SELF_EPSILON;
     }
 
-    /** 渲染生物前：只对落在减速区域内的目标缩放动画，且不碰施法者与本地玩家。 */
-    public static void onRenderLiving(RenderLivingEvent.Pre<?, ?, ?> event) {
-        LivingEntityRenderState state = event.getRenderState();
+    /**
+     * 渲染生物前：只对落在减速区域内的目标缩放动画，且不碰施法者与本地玩家。
+     *
+     * <p><b>本方法目前没有任何调用者。</b>原来的 {@code RenderLivingEvent} 订阅在
+     * {@code CyberwareClient} 里从未存在过（全仓只有本方法的定义）—— 也就是说
+     * 「时缓期缩放走路/挥砍动画」一直是死代码，与从未注册的 {@code ProjectileMixin} 同类。
+     *
+     * <p>Fabric 移植所需的入口形状就是下面这个 {@code (state, partialTick)}，
+     * 已由 {@code LivingEntityRendererMixin} 预留调用点，但**故意注释掉**——
+     * 接线等于复活一段从未生效的行为，属于改观感，不属移植等价，须单独拍板。
+     */
+    public static void onSubmit(LivingEntityRenderState state, float partialTick) {
         float r = ratioAt(state.x, state.y, state.z);
         if (r <= 0.01F) {
             return;
         }
-        if (isSelf(state, event.getPartialTick())) {
+        if (isSelf(state, partialTick)) {
             return;
         }
         float factor = 1.0F - r;

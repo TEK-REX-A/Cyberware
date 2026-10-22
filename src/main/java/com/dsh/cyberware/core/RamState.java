@@ -49,19 +49,19 @@ public record RamState(double current) {
         if (player == null) {
             return EMPTY;
         }
-        RamState state = player.getExistingDataOrNull(ModAttachments.RAM.get());
+        RamState state = Attachments.get(Attachments.of(player), ModAttachments.RAM.get());
         return state == null ? EMPTY : state;
     }
 
     /** 附件是否已经建立（= 是否已经初始化过）。 */
     public static boolean has(Player player) {
-        return player != null && player.hasData(ModAttachments.RAM.get());
+        return player != null && Attachments.has(Attachments.of(player), ModAttachments.RAM.get());
     }
 
     /** 写回 RAM（服务端）；{@code setData} 会顺带触发自动同步。 */
     public static void set(Player player, double current) {
         if (player != null) {
-            player.setData(ModAttachments.RAM.get(), new RamState(current));
+            Attachments.set(Attachments.of(player), ModAttachments.RAM.get(), new RamState(current));
         }
     }
 }

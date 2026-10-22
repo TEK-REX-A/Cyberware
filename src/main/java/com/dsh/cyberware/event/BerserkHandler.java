@@ -3,45 +3,49 @@ package com.dsh.cyberware.event;
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.config.CyberwareConfig;
 import com.dsh.cyberware.core.BerserkManager;
+import com.dsh.cyberware.network.BerserkPayload;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.Holder;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.Attribute;
 import net.minecraft.world.entity.ai.attributes.AttributeInstance;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
-import net.minecraft.ChatFormatting;
-import net.minecraft.network.chat.Component;
-import com.dsh.cyberware.network.BerserkPayload;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.network.PacketDistributor;
-import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
-import net.neoforged.neoforge.event.entity.living.LivingIncomingDamageEvent;
 
 /**
- * 狂暴 · 服务端效果。
+ * 狂暴 · 服务端效果（Fabric 版）。
  *
- * <p>四条规则，对应「把身体感知关掉」这个设定：
- * <ul>
- *   <li><b>无敌</b> —— 狂暴期间免疫一切伤害（痛觉被抑制）</li>
- *   <li><b>伤害翻倍</b> —— 输出的伤害乘以倍率</li>
- *   <li><b>击杀延长</b> —— 每击杀一个敌人，持续时间 +1.5 秒（可配置）</li>
- *   <li><b>击杀治疗</b> —— 每击杀一个敌人回复 2 颗心</li>
- * </ul>
+ * <p><b>与 NeoForge 版的三处结构差异</b>
+ * <ol>
+ *   <li>{@code EntityTickEvent.Post} → {@code ServerTickEvents.END_LEVEL_TICK} 遍历玩家；</li>
+ *   <li>发包 {@code PacketDistributor.sendToPlayer} → {@link ServerPlayNetworking#send}；</li>
+ *   <li><b>伤害翻倍不再是「改伤害值」</b>：Fabric 的 {@code ALLOW_DAMAGE} 只能允许/拒绝，
+ *       给不出改动量的钩子。这里拆成两步 —— 无敌走 {@code ALLOW_DAMAGE} 返回 false，
+ *       翻倍走 {@code AFTER_DAMAGE} 后补一次伤害（{@link #onAfterDamage}），并用
+ *       {@link #APPLYING} 防递归。<b>语义差异：补的那一下是独立伤害事件</b>
+ *       （会各自触发受击动画/无敌帧判定），与「一次伤害乘 2」不完全等价，标未验证。</li>
+ * </ol>
  */
 public final class BerserkHandler {
 
     private BerserkHandler() {
     }
 
-    /** 把状态单播给玩家本人（狂暴是自己的状态，不需要广播全维度）。 */
+    /** 补伤害时的递归护栏（AFTER_DAMAGE 里再打一次伤害会再次触发 AFTER_DAMAGE）。 */
+    private static final ThreadLocal<Boolean> APPLYING = ThreadLocal.withInitial(() -> Boolean.FALSE);
+
+    /** 把状态单播给玩家本人。 */
     public static void broadcast(ServerPlayer player) {
         boolean active = BerserkManager.isActive(player);
-        PacketDistributor.sendToPlayer(player, new BerserkPayload(
+        ServerPlayNetworking.send(player, new BerserkPayload(
                 active ? BerserkManager.remainingTicks(player) : 0,
                 active ? BerserkManager.totalTicks(player) : 0,
                 (float) BerserkManager.damageMultiplier(player),
@@ -53,45 +57,37 @@ public final class BerserkHandler {
         if (!(level instanceof ServerLevel serverLevel)) {
             return;
         }
+        boolean anyActive = false;
         for (ServerPlayer player : serverLevel.players()) {
             if (BerserkManager.isActive(player)) {
+                anyActive = true;
                 broadcast(player);
-            } else {
-                // prune() 不再需要 level 参数：过期判断一律用每条记录**自己的**世界时钟
-                BerserkManager.prune();
             }
+        }
+        if (!anyActive) {
+            BerserkManager.prune();
         }
     }
 
-    /** 攻击速度加成用的修饰符 id（挂上/摘掉都靠它认）。 */
+    /** 攻击速度加成用的修饰符 id。 */
     private static final Identifier ATTACK_SPEED_ID =
             Identifier.fromNamespaceAndPath(Cyberware.MODID, "berserk_attack_speed");
     /** 移动速度加成用的修饰符 id。 */
     private static final Identifier MOVEMENT_SPEED_ID =
             Identifier.fromNamespaceAndPath(Cyberware.MODID, "berserk_movement_speed");
 
-    /**
-     * 狂暴期间攻击速度加快。
-     *
-     * <p>用属性修饰符而不是直接改攻击冷却：{@code ATTACK_SPEED} 决定攻击条的充能速度，
-     * 挂 {@code ADD_MULTIPLIED_BASE} 就能让挥砍频率整体变快，收招时摘掉即可复原。
-     * 每 tick 校核一次（纯属性查表，开销可忽略）：玩家死亡重生、换维度都会重置属性，
-     * 靠这个循环自动补挂；狂暴一结束也立刻摘掉，不留尾巴。
-     */
-    public static void onEntityTick(EntityTickEvent.Post event) {
-        if (!(event.getEntity() instanceof ServerPlayer player)) {
-            return;
+    /** 每刻末：逐玩家校核属性修饰符（幂等，死亡/换维度后自动补挂）。 */
+    public static void onLevelTickEnd(ServerLevel level) {
+        for (ServerPlayer player : level.players()) {
+            boolean active = BerserkManager.isActive(player);
+            applyModifier(player, Attributes.ATTACK_SPEED, ATTACK_SPEED_ID,
+                    CyberwareConfig.BERSERK_ATTACK_SPEED_BONUS, active);
+            applyModifier(player, Attributes.MOVEMENT_SPEED, MOVEMENT_SPEED_ID,
+                    CyberwareConfig.BERSERK_MOVEMENT_SPEED_BONUS, active);
         }
-        boolean active = BerserkManager.isActive(player);
-        // 挥砍更快
-        applyModifier(player, Attributes.ATTACK_SPEED, ATTACK_SPEED_ID,
-                CyberwareConfig.BERSERK_ATTACK_SPEED_BONUS.get(), active);
-        // 跑得更快
-        applyModifier(player, Attributes.MOVEMENT_SPEED, MOVEMENT_SPEED_ID,
-                CyberwareConfig.BERSERK_MOVEMENT_SPEED_BONUS.get(), active);
     }
 
-    /** 挂上/摘掉一条属性修饰符（幂等：状态已经对了就什么都不做）。 */
+    /** 挂上/摘掉一条属性修饰符（幂等）。 */
     private static void applyModifier(ServerPlayer player, Holder<Attribute> attribute,
                                       Identifier id, double bonus, boolean active) {
         AttributeInstance instance = player.getAttribute(attribute);
@@ -109,50 +105,63 @@ public final class BerserkHandler {
         }
     }
 
-    /** 无敌 + 伤害翻倍。 */
-    public static void onIncomingDamage(LivingIncomingDamageEvent event) {
-        if (event.getEntity().level().isClientSide()) {
+    /** 无敌：狂暴中的玩家不吃任何伤害。 */
+    public static boolean allowDamage(LivingEntity victim, DamageSource source) {
+        if (!(victim instanceof ServerPlayer player)) {
+            return true;
+        }
+        if (!CyberwareConfig.BERSERK_INVULNERABLE) {
+            return true;
+        }
+        return !BerserkManager.isActive(player);
+    }
+
+    /** 伤害翻倍：攻击者正在狂暴 → 事后补一次等量差额（见类注释的语义差异说明）。 */
+    public static void onAfterDamage(LivingEntity victim, DamageSource source,
+                                     float baseDamage, float damageTaken, boolean blocked) {
+        if (APPLYING.get()) {
             return;
         }
-
-        // —— 无敌：狂暴中的玩家不吃任何伤害 ——
-        if (event.getEntity() instanceof ServerPlayer victim
-                && BerserkManager.isActive(victim)
-                && CyberwareConfig.BERSERK_INVULNERABLE.get()) {
-            event.setCanceled(true);
+        if (!(source.getEntity() instanceof ServerPlayer berserker) || berserker == victim) {
             return;
         }
-
-        // —— 伤害翻倍：攻击者正在狂暴 ——
-        Entity attacker = event.getSource().getEntity();
-        if (attacker instanceof ServerPlayer berserker && BerserkManager.isActive(berserker)) {
-            double multiplier = BerserkManager.damageMultiplier(berserker);
-            if (multiplier > 1.0D) {
-                event.setAmount((float) (event.getAmount() * multiplier));
-            }
+        if (!BerserkManager.isActive(berserker)) {
+            return;
+        }
+        double multiplier = BerserkManager.damageMultiplier(berserker);
+        if (multiplier <= 1.0D) {
+            return;
+        }
+        float extra = (float) (damageTaken * (multiplier - 1.0D));
+        if (extra <= 0.0F) {
+            return;
+        }
+        if (!(victim.level() instanceof ServerLevel serverLevel)) {
+            return;
+        }
+        APPLYING.set(Boolean.TRUE);
+        try {
+            victim.hurtServer(serverLevel, source, extra);
+        } finally {
+            APPLYING.set(Boolean.FALSE);
         }
     }
 
     /** 击杀：延长时间 + 回血。 */
-    public static void onLivingDeath(LivingDeathEvent event) {
-        if (event.getEntity().level().isClientSide()) {
-            return;
-        }
-        Entity killer = event.getSource().getEntity();
-        if (!(killer instanceof ServerPlayer player) || event.getEntity() == player) {
+    public static void onLivingDeath(LivingEntity entity, DamageSource source) {
+        Entity killer = source.getEntity();
+        if (!(killer instanceof ServerPlayer player) || entity == player) {
             return;
         }
         if (!BerserkManager.isActive(player)) {
             return;
         }
 
-        // 延长
         int added = BerserkManager.extend(player,
-                CyberwareConfig.BERSERK_KILL_EXTEND_TICKS.get(),
-                CyberwareConfig.BERSERK_KILL_EXTEND_LIMIT.get());
+                CyberwareConfig.BERSERK_KILL_EXTEND_TICKS,
+                CyberwareConfig.BERSERK_KILL_EXTEND_LIMIT);
 
-        // 回血：击杀治疗（1 颗心 = 2 点生命）
-        double hearts = CyberwareConfig.BERSERK_KILL_HEAL_HEARTS.get();
+        double hearts = CyberwareConfig.BERSERK_KILL_HEAL_HEARTS;
         if (hearts > 0.0D && player.getHealth() < player.getMaxHealth()) {
             player.heal((float) (hearts * 2.0D));
         }

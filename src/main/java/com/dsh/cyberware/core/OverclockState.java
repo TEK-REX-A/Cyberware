@@ -58,14 +58,14 @@ public record OverclockState(boolean active, long expiresAt, long cooldownUntil)
         if (player == null) {
             return IDLE;
         }
-        OverclockState state = player.getExistingDataOrNull(ModAttachments.OVERCLOCK.get());
+        OverclockState state = Attachments.get(Attachments.of(player), ModAttachments.OVERCLOCK.get());
         return state == null ? IDLE : state;
     }
 
     /** 写回（服务端）；{@code setData} 顺带触发自动同步。 */
     public static void set(Player player, OverclockState state) {
         if (player != null) {
-            player.setData(ModAttachments.OVERCLOCK.get(), state == null ? IDLE : state);
+            Attachments.set(Attachments.of(player), ModAttachments.OVERCLOCK.get(), state == null ? IDLE : state);
         }
     }
 

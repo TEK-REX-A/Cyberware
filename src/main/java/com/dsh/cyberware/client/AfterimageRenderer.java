@@ -21,7 +21,6 @@ import net.minecraft.resources.Identifier;
 import net.minecraft.util.ARGB;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.event.RenderLivingEvent;
 
 /**
  * 斯安威斯坦 · 洋葱皮残影（A.txt 第 7 步）。
@@ -89,15 +88,17 @@ public final class AfterimageRenderer {
     }
 
     /**
-     * 渲染事件的入口。
+     * 渲染入口（由 LivingEntityRendererMixin 在 submit 的 HEAD 调用）。
      *
      * <p><b>外面这层 try/catch 是保命的。</b>渲染事件里抛出任何异常都会直接崩客户端 ——
      * 0.3.11-Hotfix-6 就因为一个 {@code ClassCastException} 把主人踢出过游戏。
      * 残影只是装饰品，出任何意外都只打一条日志，绝不中断游戏。
      */
-    public static void onRenderLiving(RenderLivingEvent.Pre<?, ?, ?> event) {
+    public static void onSubmit(LivingEntityRenderState state, PoseStack poseStack,
+                                SubmitNodeCollector submitCollector, LivingEntityRenderer renderer,
+                                float partialTick) {
         try {
-            renderAfterimages(event);
+            renderAfterimages(state, poseStack, submitCollector, renderer, partialTick);
         } catch (Throwable t) {
             if (FAIL_LOGGED.compareAndSet(false, true)) {
                 System.out.println("[cyberware] 残影渲染异常（已忽略，不影响游戏）: " + t);
@@ -108,15 +109,16 @@ public final class AfterimageRenderer {
         }
     }
 
-    private static void renderAfterimages(RenderLivingEvent.Pre<?, ?, ?> event) {
+    private static void renderAfterimages(LivingEntityRenderState state, PoseStack poseStack,
+                                          SubmitNodeCollector submitCollector, LivingEntityRenderer renderer,
+                                          float partialTick) {
         // 只跟斯安威斯坦 —— 狂暴是力量型，不拖影
         float intensity = ClientTimeDilation.ratioNow();
         if (intensity <= 0.05F) {
             return;
         }
 
-        LivingEntityRenderState state = event.getRenderState();
-        if (!isLocalPlayer(state, event.getPartialTick())) {
+        if (!isLocalPlayer(state, partialTick)) {
             return;
         }
 
@@ -138,12 +140,11 @@ public final class AfterimageRenderer {
         }
         int step = GHOST_STEP;
 
-        LivingEntityRenderer renderer = (LivingEntityRenderer) event.getRenderer();
         LivingEntityRendererAccessor accessor = (LivingEntityRendererAccessor) renderer;
-        PoseStack poseStack = event.getPoseStack();
-        OrderedSubmitNodeCollector collector = event.getSubmitNodeCollector();
-        SubmitNodeCollector layerCollector = collector instanceof SubmitNodeCollector specific
-                ? specific : null;
+        // SubmitNodeCollector extends OrderedSubmitNodeCollector（javap 实测），所以直接上转即可。
+        // 原来那句 instanceof 是为了从 Ordered 往下转成 Submit，现在参数本来就是 Submit，恒成立。
+        OrderedSubmitNodeCollector collector = submitCollector;
+        SubmitNodeCollector layerCollector = submitCollector;
 
         Identifier texture = renderer.getTextureLocation(state);
         RenderType renderType = RenderTypes.entityTranslucentCullItemTarget(texture);

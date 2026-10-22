@@ -2,3 +2,11 @@ build/
 .gradle/
 run/
 *.log
+
+# 手工备份 / 迁移残留：只留在本地，不进仓库
+*.bak
+*.bak2
+*.bak-*
+*.neoforge.bak
+*.orig
+*.rej

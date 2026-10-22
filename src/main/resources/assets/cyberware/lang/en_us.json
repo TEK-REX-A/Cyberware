@@ -51,5 +51,10 @@
   "key.cyberware.radial": "Cyberware Radial",
   "key.cyberware.overclock": "Overclock Cyberware",
   "key.cyberware.scan": "Kiroshi Scan",
-  "cyberware.subtitle.sandevistan_activate": "Sandevistan activated"
+  "cyberware.subtitle.sandevistan_activate": "Sandevistan activated",
+  "item.cyberware.sandevistan_apogee": "Militech Apogee Sandevistan",
+  "item.cyberware.sandevistan_c4": "Militech Falcon Sandevistan",
+  "item.cyberware.sandevistan_c1": "Zetatech Sandevistan",
+  "item.cyberware.sandevistan_c2": "Dynalar Sandevistan",
+  "item.cyberware.sandevistan_c3": "QianT Sandevistan"
 }

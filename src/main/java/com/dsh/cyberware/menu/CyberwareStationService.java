@@ -1,20 +1,23 @@
 package com.dsh.cyberware.menu;
 
+import com.dsh.cyberware.core.Attachments;
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.core.CyberwareDefinition;
 import com.dsh.cyberware.core.CyberwareDefinitions;
 import com.dsh.cyberware.core.CyberwareInstallation;
 import com.dsh.cyberware.data.CyberwareData;
 import com.dsh.cyberware.item.CyberwareItem;
+import com.dsh.cyberware.network.CyberwareNetwork;
 import com.dsh.cyberware.registry.ModAttachments;
 import com.dsh.cyberware.registry.ModComponents;
 import com.dsh.cyberware.registry.ModItems;
 import java.util.List;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.Container;
+import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.neoforged.neoforge.registries.DeferredItem;
+import com.dsh.cyberware.registry.RegistryHolder;
 
 /**
  * 义体装卸的<b>服务端权威</b>实现 —— 操作台按钮与网络包都只是「请求」，
@@ -24,18 +27,23 @@ import net.neoforged.neoforge.registries.DeferredItem;
  * {@code CyberwareNetwork} 是两条不同的入口（原版按钮包 / 自定义 payload），
  * 两者的规则必须一模一样 —— 复制粘贴两份规则迟早会分叉。
  *
- * <h3>数据流（安装）</h3>
+ * <h3>数据流（安装，v0.5.4 起没有送料槽）</h3>
  * <ol>
- *   <li>客户端：操作台界面 → {@code Minecraft.getInstance().gameMode
- *       .handleInventoryButtonClick(containerId, BUTTON_INSTALL_BASE + slot)}
- *       或者发 {@code CyberwareActionPayload.install(containerId, slot)}。</li>
- *   <li>服务端：{@link CyberwareStationMenu#clickMenuButton}（按钮路径）
- *       或 {@code CyberwareNetwork.handleAction}（payload 路径）→ 本类。</li>
- *   <li>本类：校验 → 扣物品 → 写 {@code ModAttachments.INSTALLATION} → 回执。</li>
+ *   <li>客户端：操作台界面点「安装」→
+ *       {@code CyberwareActionPayload.install(containerId, defId)}（带型号 id）。</li>
+ *   <li>服务端：{@code CyberwareNetwork.handleAction} → 本类；原版按钮路径走
+ *       {@link CyberwareStationMenu#clickMenuButton} 后同样进本类。</li>
+ *   <li>本类：校验 → <b>从 {@code player.getInventory()} 里找到并扣掉 1 件</b>
+ *       → 写 {@code ModAttachments.INSTALLATION} → {@link CyberwareNetwork#syncInstallation}
+ *       把新表推给该玩家的客户端 → 回执。</li>
  * </ol>
  *
- * <p>{@code AttachmentType.sync} 已配置，所以 {@code setData} 会由 NeoForge
- * 自动把新表同步给该玩家（以及注视他的客户端）—— 不需要额外补 S2C 包。
+ * <p>⚠ <b>「吞义体」的教训（0.5.3 真机）</b>：安装成功但界面/轮盘读不到，
+ * 根因不是写入失败，而是 <b>附件没有同步到客户端</b>
+ * （{@code ModAttachments.INSTALLATION} 故意没有 {@code .syncWith(...)}，
+ * 见该类注释：Fabric 的附件同步在 Android 上会炸）。所以每次改动权威数据之后
+ * <b>必须</b>显式 {@link CyberwareNetwork#syncInstallation}，否则客户端
+ * {@code CyberwareInstallation.of(player)} 永远是空表。
  */
 public final class CyberwareStationService {
 
@@ -47,34 +55,34 @@ public final class CyberwareStationService {
     // ------------------------------------------------------------------
 
     /**
-     * 从操作台的义体槽里取一件装上。
+     * 从玩家背包里取一件义体装上（v0.5.4 起取消了操作台送料槽）。
      *
      * @param containerId 服务端当前打开的菜单 id；{@code < 0} 表示不校验
-     * @param slotIndex   操作台义体槽下标（0..{@link CyberwareStationMenu#IMPLANT_SLOT_COUNT}-1）
+     * @param defId       要安装的型号 id（界面点「安装」时选中的那件）
      * @return 是否真的装上了
      */
-    public static boolean install(ServerPlayer player, int containerId, int slotIndex) {
+    public static boolean install(ServerPlayer player, int containerId, String defId) {
         CyberwareStationMenu menu = openStation(player, containerId);
         if (menu == null) {
             return fail(player, "操作台没有打开，无法安装");
         }
-        if (slotIndex < 0 || slotIndex >= CyberwareStationMenu.IMPLANT_SLOT_COUNT) {
-            return fail(player, "义体槽下标越界：" + slotIndex);
+        if (defId == null || defId.isBlank()) {
+            return fail(player, "没有指定要安装的义体");
         }
 
-        Container container = menu.getImplantContainer();
-        if (slotIndex >= container.getContainerSize()) {
-            return fail(player, "义体槽不存在：" + slotIndex);
+        int found = findInventorySlot(player, defId);
+        if (found < 0) {
+            return fail(player, "背包里没有「" + displayNameOf(defId) + "」");
         }
-        ItemStack stack = container.getItem(slotIndex);
-        if (stack.isEmpty()) {
-            return fail(player, "第 " + (slotIndex + 1) + " 个义体槽是空的");
-        }
+        ItemStack stack = player.getInventory().getItem(found);
         if (!(stack.getItem() instanceof CyberwareItem item)) {
             return fail(player, "这个物品不是义体，装不了");
         }
 
         CyberwareDefinition def = item.definition();
+        if (def == null) {
+            return fail(player, "未知型号：定义表里找不到这件义体（可能是旧存档里已删除的型号）");
+        }
         CyberwareData data = CyberwareItem.dataOf(stack);
         CyberwareInstallation current = CyberwareInstallation.of(player);
 
@@ -85,17 +93,53 @@ public final class CyberwareStationService {
 
         CyberwareDefinition.Variant variant = def.variantFor(data.rarity());
 
-        // ---- 真正落地：先写附件（触发同步），再扣物品 ----
-        player.setData(ModAttachments.INSTALLATION.get(), current.with(def.id(), data));
-        container.removeItem(slotIndex, 1);
-        container.setChanged();
+        // ---- 真正落地：先写附件（权威数据），再扣物品，最后立刻同步给客户端 ----
+        Attachments.set(Attachments.of(player), ModAttachments.INSTALLATION.get(), current.with(def.id(), data));
+        player.getInventory().removeItem(found, 1);
+        player.getInventory().setChanged();
         menu.broadcastChanges();
+        // ★ 关键一步：附件不会自动同步（见类注释），少了这一行就是「吞义体」
+        CyberwareNetwork.syncInstallation(player);
 
-        Cyberware.LOGGER.debug("[cyberware] {} 植入 {}（{} / 容量 {}）", player.getName().getString(),
-                def.id(), data.rarity(), variant == null ? "?" : variant.capacity());
+        Cyberware.LOGGER.debug("[cyberware] {} 植入 {}（{} / 容量 {}，取自背包第 {} 格）",
+                player.getName().getString(), def.id(), data.rarity(),
+                variant == null ? "?" : variant.capacity(), found);
         return ok(player, "已植入 " + def.displayName() + "（" + data.rarity().displayName() + "）· 占用容量 "
                 + (variant == null ? "?" : variant.capacity()) + " · 已用 "
                 + CyberwareInstallation.usedCapacity(player) + "/" + limitText());
+    }
+
+    /**
+     * 在玩家背包里找「型号 id 匹配」的义体，返回背包下标；没有返回 {@code -1}。
+     *
+     * <p><b>两端共用这一条规则</b>（界面预检也调它），否则会出现
+     * 「界面说能装、服务端却扣了另一件」。
+     *
+     * <p>同型号有多件时<b>挑稀有度最低的那件</b>（最不吃亏）：玩家同时有普通与传说
+     * 时不该默默把传说吃掉。
+     */
+    public static int findInventorySlot(Player player, String defId) {
+        if (player == null || defId == null || defId.isBlank()) {
+            return -1;
+        }
+        Inventory inventory = player.getInventory();
+        int best = -1;
+        int bestRarity = Integer.MAX_VALUE;
+        for (int i = 0; i < inventory.getContainerSize(); i++) {
+            ItemStack stack = inventory.getItem(i);
+            if (stack.isEmpty() || !(stack.getItem() instanceof CyberwareItem item)) {
+                continue;
+            }
+            if (!defId.equals(item.cyberwareId())) {
+                continue;
+            }
+            int rarity = CyberwareItem.dataOf(stack).rarityIndex();
+            if (rarity < bestRarity) {
+                bestRarity = rarity;
+                best = i;
+            }
+        }
+        return best;
     }
 
     /**
@@ -173,7 +217,9 @@ public final class CyberwareStationService {
         }
 
         // ---- 先清表，再归还物品（清表失败等于没卸，物品必须跟着表走）----
-        player.setData(ModAttachments.INSTALLATION.get(), current.without(targetId));
+        Attachments.set(Attachments.of(player), ModAttachments.INSTALLATION.get(), current.without(targetId));
+        // ★ 与安装同理：权威数据变了就必须同步，否则客户端还显示「已装」
+        CyberwareNetwork.syncInstallation(player);
 
         CyberwareDefinition def = CyberwareDefinitions.byId(targetId);
         String name = def == null ? targetId : def.displayName();
@@ -216,7 +262,7 @@ public final class CyberwareStationService {
     /**
      * 取服务端当前打开的操作台菜单。
      *
-     * <p>这里同时是「所有数据变更只在服务端」的一道闸：客户端本地菜单（SimpleContainer 版）
+     * <p>这里同时是「所有数据变更只在服务端」的一道闸：客户端本地菜单（Simplified 版）
      * 永远不会通过 {@code stillValid} + {@link ServerPlayer} 这两道检查。
      */
     private static CyberwareStationMenu openStation(ServerPlayer player, int containerId) {
@@ -230,7 +276,7 @@ public final class CyberwareStationService {
 
     /** 按型号 id 与数据重造一件义体物品；定义表里已经没有该型号时返回空栈。 */
     private static ItemStack buildReturnStack(String defId, CyberwareData data) {
-        DeferredItem<CyberwareItem> item = ModItems.CYBERWARE.get(defId);
+        RegistryHolder<CyberwareItem> item = ModItems.CYBERWARE.get(defId);
         if (item == null) {
             Cyberware.LOGGER.warn("[cyberware] 卸载 {}：物品注册表里没有这个型号，物品无法归还", defId);
             return ItemStack.EMPTY;
@@ -241,26 +287,20 @@ public final class CyberwareStationService {
     }
 
     /**
-     * 把归还的物品放进玩家能看到/拿到的地方：操作台空槽 → 背包 → 脚边。
+     * 把归还的物品放回玩家背包；背包满了就掉在脚边。
      *
-     * <p>操作台优先是因为那个界面里只画了 10 个义体槽（背包格被移出可视区域，
-     * 见 {@code CyberwareStationMenu.INVENTORY_X}），放进背包玩家会以为物品丢了。
+     * <p>v0.5.4 起操作台没有送料槽了，所以这里只剩这一条路 —— 不再有
+     * 「先塞回操作台槽位」的分支（那个分支会让物品卡在方块里）。
      */
     private static String give(CyberwareStationMenu menu, ServerPlayer player, ItemStack stack) {
-        Container container = menu.getImplantContainer();
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            if (container.getItem(i).isEmpty()) {
-                container.setItem(i, stack);
-                container.setChanged();
-                menu.broadcastChanges();
-                return "操作台第 " + (i + 1) + " 个槽";
-            }
-        }
-        if (player.getInventory().add(stack)) {
+        Inventory inventory = player.getInventory();
+        if (inventory.add(stack)) {
+            inventory.setChanged();
+            menu.broadcastChanges();
             return "背包";
         }
         player.drop(stack, false);
-        return "脚边（操作台与背包都满了）";
+        return "脚边（背包满了）";
     }
 
     private static String displayNameOf(String defId) {
@@ -284,3 +324,4 @@ public final class CyberwareStationService {
         return true;
     }
 }
+

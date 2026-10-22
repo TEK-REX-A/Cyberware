@@ -49,8 +49,8 @@ public final class CyberwareAbilities {
         // —— 狂暴：把痛觉和疲劳一起关掉 ——
         if (def.id().startsWith("berserk_")) {
             int seconds = (int) Math.round(variant.stat(CyberwareDefinition.Stats.DURATION,
-                    com.dsh.cyberware.config.CyberwareConfig.BERSERK_DURATION_SECONDS.get()));
-            double multiplier = com.dsh.cyberware.config.CyberwareConfig.BERSERK_DAMAGE_MULTIPLIER.get();
+                    com.dsh.cyberware.config.CyberwareConfig.BERSERK_DURATION_SECONDS));
+            double multiplier = com.dsh.cyberware.config.CyberwareConfig.BERSERK_DAMAGE_MULTIPLIER;
             BerserkManager.activate(player, multiplier, Math.max(1, seconds) * 20);
             if (player instanceof net.minecraft.server.level.ServerPlayer serverPlayer) {
                 com.dsh.cyberware.event.BerserkHandler.broadcast(serverPlayer);

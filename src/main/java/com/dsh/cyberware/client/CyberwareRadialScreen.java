@@ -19,7 +19,7 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.RenderPipelines;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
 /**
  * <b>R 键义体轮盘</b> —— 按住 R 弹出环形菜单，鼠标指向选择，松开施放。
@@ -381,7 +381,7 @@ public class CyberwareRadialScreen extends Screen {
         try {
             var window = this.minecraft.getWindow();
             down = window != null && window.handle() != 0L
-                    && InputConstants.isKeyDown(window, CyberwareKeys.RADIAL.getKey().getValue());
+                    && InputConstants.isKeyDown(window, KeyMappingKeys.getValue(CyberwareKeys.RADIAL));
         } catch (Throwable t) {
             down = true; // 查询失败就当作还按着，交给 keyReleased 处理
         }
@@ -426,7 +426,7 @@ public class CyberwareRadialScreen extends Screen {
 
         // 我们返回了 true，KeyboardHandler 就不会替我们清这个键的按下状态 —— 自己清掉，
         // 免得 RADIAL 卡在 isDown。静态 set 比 setDown 更直接（KeyMapping.set(Key, false)）。
-        KeyMapping.set(CyberwareKeys.RADIAL.getKey(), false);
+        KeyMapping.set(KeyMappingKeys.get(CyberwareKeys.RADIAL), false);
 
         this.minecraft.setScreen(null); // 恢复鼠标抓取 + 触发 removed()
         if (chosen == null) {
@@ -434,14 +434,14 @@ public class CyberwareRadialScreen extends Screen {
         }
         if (isOverclock(chosen)) {
             // t36：轮盘里的「脑机超频」项 —— 只发「请求切换」，能否开由服务端裁决
-            ClientPacketDistributor.sendToServer(OverclockPayload.toggleRequest());
+            ClientPlayNetworking.send(OverclockPayload.toggleRequest());
         } else {
-            ClientPacketDistributor.sendToServer(ActivatePayload.of(chosen.id()));
+            ClientPlayNetworking.send(ActivatePayload.of(chosen.id()));
         }
     }
 
     private static boolean isRadialKey(int key) {
-        int bound = CyberwareKeys.RADIAL.getKey().getValue();
+        int bound = KeyMappingKeys.getValue(CyberwareKeys.RADIAL);
         return key >= 0 && key == bound;
     }
 

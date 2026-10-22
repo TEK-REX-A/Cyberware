@@ -1,10 +1,13 @@
 package com.dsh.cyberware.block;
 
+import com.dsh.cyberware.Cyberware;
 import com.mojang.serialization.MapCodec;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BaseEntityBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -57,12 +60,31 @@ public class CyberwareStationBlock extends BaseEntityBlock {
     @Override
     protected InteractionResult useWithoutItem(BlockState state, Level level, BlockPos pos,
                                                Player player, BlockHitResult hitResult) {
+        Cyberware.LOGGER.warn("[cyberware][probe] useWithoutItem 被调用 clientSide={}",
+                level.isClientSide());
         if (!level.isClientSide()) {
             MenuProvider provider = this.getMenuProvider(state, level, pos);
+            Cyberware.LOGGER.warn("[cyberware][probe] getMenuProvider -> {}", provider);
             if (provider != null) {
-                player.openMenu(provider);
+                Cyberware.LOGGER.warn("[cyberware][probe] openMenu 结果 = {}",
+                        player.openMenu(provider));
             }
         }
         return InteractionResult.SUCCESS;
+    }
+
+    /**
+     * 右键入口探针。
+     *
+     * <p>26.1.2 里右键方块先走 {@code useItemOn}，再视手持物决定是否转 {@code useWithoutItem}
+     * （两者都是 {@code BlockBehaviour} 上的 protected 默认实现，实测签名见方法注释）。
+     * 这里只记一行、然后原样委托 —— 用来区分「右键根本没到方块」与「到了方块但没进 openMenu」。
+     */
+    @Override
+    protected InteractionResult useItemOn(ItemStack stack, BlockState state, Level level, BlockPos pos,
+                                         Player player, InteractionHand hand, BlockHitResult hitResult) {
+        Cyberware.LOGGER.warn("[cyberware][probe] useItemOn 被调用 hand={} stack={} clientSide={}",
+                hand, stack, level.isClientSide());
+        return super.useItemOn(stack, state, level, pos, player, hand, hitResult);
     }
 }

@@ -7,7 +7,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.network.chat.Component;
-import net.neoforged.neoforge.client.network.ClientPacketDistributor;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayNetworking;
 
 /**
  * <b>R 键 · 破解轮盘</b>（t29，契约 §1.3）：只在「有锁定目标」时打开。
@@ -242,16 +242,16 @@ public class HackRadialScreen extends Screen {
         }
         this.finished = true;
         String hackId = selected >= 0 ? this.entries.get(selected).id() : null;
-        net.minecraft.client.KeyMapping.set(CyberwareKeys.SCAN.getKey(), false);
+        net.minecraft.client.KeyMapping.set(KeyMappingKeys.get(CyberwareKeys.SCAN), false);
         this.minecraft.setScreen(null);
         if (hackId != null && targetEntityId > 0) {
-            ClientPacketDistributor.sendToServer(HackPayload.cast(targetEntityId, hackId));
+            ClientPlayNetworking.send(HackPayload.cast(targetEntityId, hackId));
         }
     }
 
     /** 收尾键：t36 起破解轮盘由 X 长按呼出，所以松手判的是 X（不再是 R）。 */
     private static boolean isRadialKey(int key) {
-        int bound = CyberwareKeys.SCAN.getKey().getValue();
+        int bound = KeyMappingKeys.getValue(CyberwareKeys.SCAN);
         return key >= 0 && key == bound;
     }
 }

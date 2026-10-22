@@ -14,7 +14,7 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
-import net.neoforged.neoforge.network.PacketDistributor;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 
 /**
  * 快速破解 · 服务端玩法闭环（t24）。
@@ -258,7 +258,7 @@ public final class HackSystem {
 
     private static void send(ServerPlayer player, HackPayload.Action action, int targetEntityId,
                              String hackId, int remaining, int total, int ramCost, String note) {
-        PacketDistributor.sendToPlayer(player, new HackPayload(
+        ServerPlayNetworking.send(player, new HackPayload(
                 action, targetEntityId, hackId, remaining, total, ramCost, note));
     }
 }

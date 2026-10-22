@@ -2,22 +2,26 @@ package com.dsh.cyberware.registry;
 
 import com.dsh.cyberware.Cyberware;
 import com.dsh.cyberware.data.CyberwareData;
+import net.minecraft.core.Registry;
 import net.minecraft.core.component.DataComponentType;
-import net.minecraft.core.registries.Registries;
-import net.neoforged.neoforge.registries.DeferredHolder;
-import net.neoforged.neoforge.registries.DeferredRegister;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.Identifier;
 
-/** 数据组件注册。义体的稀有度/等级通过这个组件挂在物品栈上。 */
+/** 数据组件注册（组件本体用的是 26.1.2 原版 DataComponentType，Fabric 侧无需重写）。 */
 public final class ModComponents {
 
-    public static final DeferredRegister.DataComponents COMPONENTS =
-            DeferredRegister.createDataComponents(Registries.DATA_COMPONENT_TYPE, Cyberware.MODID);
-
-    public static final DeferredHolder<DataComponentType<?>, DataComponentType<CyberwareData>> CYBERWARE_DATA =
-            COMPONENTS.registerComponentType("cyberware_data", builder -> builder
-                    .persistent(CyberwareData.CODEC)
-                    .networkSynchronized(CyberwareData.STREAM_CODEC));
+    public static RegistryHolder<DataComponentType<CyberwareData>> CYBERWARE_DATA;
 
     private ModComponents() {
+    }
+
+    public static void register() {
+        CYBERWARE_DATA = new RegistryHolder<>(Registry.register(
+                BuiltInRegistries.DATA_COMPONENT_TYPE,
+                Identifier.fromNamespaceAndPath(Cyberware.MODID, "cyberware_data"),
+                DataComponentType.<CyberwareData>builder()
+                        .persistent(CyberwareData.CODEC)
+                        .networkSynchronized(CyberwareData.STREAM_CODEC)
+                        .build()));
     }
 }

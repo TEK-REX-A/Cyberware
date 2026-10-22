@@ -18,7 +18,15 @@ public enum CyberwareSlot {
     LEGS("腿部", 7, 2),
     CIRCULATORY("循环系统", 8, 1),
     INTEGUMENTARY("表皮", 9, 1),
-    SKIN("皮肤系统", 10, 1);
+    SKIN("皮肤系统", 10, 1),
+    /**
+     * 手掌槽（2026-10-22 主人拍板新增）：智能连接一类原本挤在 ARMS 里，
+     * 但界面上「手掌」是一个独立部位，没有自己的槽只能落到别处。
+     *
+     * ⚠ 必须放在枚举**最后**——{@link #byIndexSafe} 用 values()[index]，
+     * 插在中间会让已有存档的槽位索引整体错位。
+     */
+    HAND("手掌", 11, 2);
 
     private final String displayName;
     private final int order;

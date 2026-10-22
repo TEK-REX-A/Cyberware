@@ -5,6 +5,7 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
+import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
@@ -16,7 +17,6 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.phys.Vec3;
-import net.neoforged.neoforge.client.event.RenderGuiEvent;
 
 /**
  * 脑机超频客户端表现层（t25，P0）。
@@ -77,9 +77,16 @@ public final class RamHud {
 
     // ═══════════════════ GUI 入口 ═══════════════════
 
-    public static void onRenderGui(RenderGuiEvent.Post event) {
+    /**
+     * Fabric HUD 入口 —— 对应 {@code HudElement} 的唯一抽象方法
+     * {@code extractRenderState(GuiGraphicsExtractor, DeltaTracker)}（本机实测，fabric-rendering-v1-23.3.1）。
+     *
+     * <p>替代原来的 NeoForge {@code RenderGuiEvent.Post}。注册（由客户端初始化器负责）：
+     * {@code HudElementRegistry.addLast(Identifier, RamHud::extractRenderState)}。
+     */
+    public static void extractRenderState(GuiGraphicsExtractor g, DeltaTracker deltaTracker) {
         try {
-            render(event.getGuiGraphics());
+            render(g);
         } catch (Throwable t) {
             if (FAIL_LOGGED.compareAndSet(false, true)) {
                 Cyberware.LOGGER.warn("[cyberware] RAM HUD 渲染异常（已忽略，不影响游戏）", t);

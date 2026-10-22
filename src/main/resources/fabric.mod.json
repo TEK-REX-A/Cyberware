@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "id": "cyberware",
+  "version": "${version}",
+  "name": "Cyberware 义体系统",
+  "description": "赛博朋克风格义体植入系统：义体容量、义体操作台、植入体界面、稀有度与升级。（贴图素材来自 Cyberpunk 2077，版权归 CD Projekt Red，不在 AGPL-3.0 范围内；非商业粉丝作品。）",
+  "authors": [
+    "TEK_REX",
+    "Neko"
+  ],
+  "contact": {
+    "issues": "https://github.com/TEK-REX-A/Cyberware/issues"
+  },
+  "license": "AGPL-3.0-only",
+  "icon": "assets/cyberware/icon.png",
+  "environment": "*",
+  "entrypoints": {
+    "main": [
+      "com.dsh.cyberware.CyberwareFabric"
+    ],
+    "client": [
+      "com.dsh.cyberware.client.CyberwareClientFabric"
+    ]
+  },
+  "mixins": [
+    "cyberware.mixins.json"
+  ],
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric-api": "*",
+    "minecraft": ">=26.1.2",
+    "java": ">=25"
+  }
+}

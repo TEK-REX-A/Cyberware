@@ -4,7 +4,6 @@ import com.dsh.cyberware.core.DilationTickGate;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.entity.projectile.Projectile;
-import net.neoforged.neoforge.event.tick.EntityTickEvent;
 
 /**
  * 投射物时间减缓 · <b>客户端这一半</b>。
@@ -24,19 +23,23 @@ public final class ClientProjectileDilation {
     private ClientProjectileDilation() {
     }
 
-    public static void onEntityTickPre(EntityTickEvent.Pre event) {
-        Entity entity = event.getEntity();
+    /**
+     * Fabric 移植：NeoForge 的 {@code EntityTickEvent.Pre} 没有等价事件
+     * （本机实测：fabric-api 0.155.3 的模块清单里没有任何实体 tick 前事件），
+     * 改为由 mixin {@code EntityTickSkipMixin} 注入 {@code Entity.tick()V} 的 HEAD 调用本方法。
+     *
+     * @return true = 这一 tick 该跳过（调用方执行 {@code ci.cancel()}）
+     */
+    public static boolean shouldCancelTick(Entity entity) {
         if (!(entity instanceof Projectile projectile)) {
-            return;
+            return false;
         }
         // 玩家自己射出的箭豁免：自己没慢、箭却慢了就本末倒置
         if (projectile.getOwner() instanceof Player) {
-            return;
+            return false;
         }
         double timeScale = ClientTimeDilation.timeScaleAt(
                 entity.getX(), entity.getY(), entity.getZ());
-        if (DilationTickGate.shouldSkip(entity, timeScale)) {
-            event.setCanceled(true);
-        }
+        return DilationTickGate.shouldSkip(entity, timeScale);
     }
 }

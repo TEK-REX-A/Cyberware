@@ -19,9 +19,6 @@ import net.minecraft.client.renderer.PostChain;
 import net.minecraft.client.renderer.PostPass;
 import net.minecraft.resources.Identifier;
 import net.minecraft.util.Mth;
-import net.neoforged.neoforge.client.event.ComputeFovModifierEvent;
-import net.neoforged.neoforge.client.event.FrameGraphSetupEvent;
-import org.lwjgl.system.MemoryUtil;
 
 /**
  * 斯安威斯坦 · 屏幕后处理（边缘径向模糊 + 内侧压缩 + 色散）。
@@ -96,14 +93,20 @@ public final class SandevistanPostProcessor {
     /**
      * 激活时把 FOV 拉大：视野变宽 = 速度感。
      *
-     * <p>用 NeoForge 的 {@link ComputeFovModifierEvent} 乘在原有修正值上，
-     * 这样疾跑、瞄准、水下等原版修正不会被覆盖掉。
+     * <p><b>Fabric 侧无等价事件</b>：fabric-api 0.155.3+26.1.2 里没有
+     * {@code ComputeFovModifierEvent} 的对应物（本机实测：41 个模块、fabric-rendering-v1
+     * 的 33 个 API 类里都没有 FOV 相关回调）。替代方案是 mixin 注入原版
+     * {@code AbstractClientPlayer.getFieldOfViewModifier(boolean,float)}（描述符 {@code (ZF)F}，
+     * javap 实测；{@code LocalPlayer}/{@code Player} 均未覆写，所以本地玩家必然走到），
+     * 由 {@code AbstractClientPlayerMixin} 把返回值交给本方法。
+     *
+     * <p>乘法语义保持不变：乘在原版算出的修正值上，疾跑/瞄准/水下不会被覆盖。
      */
-    public static void onComputeFov(ComputeFovModifierEvent event) {
+    public static float applyFovModifier(float original) {
         if (fovIntensity <= 0.01F) {
-            return;
+            return original;
         }
-        event.setNewFovModifier(event.getNewFovModifier() * (1.0F + FOV_BOOST * fovIntensity));
+        return original * (1.0F + FOV_BOOST * fovIntensity);
     }
 
     /** 客户端每 tick 调一次：把强度朝目标值推进。 */
@@ -177,7 +180,7 @@ public final class SandevistanPostProcessor {
      * 不依赖任何外部帧图，配 {@code GraphicsResourceAllocator.UNPOOLED} 就能独立跑完。
      */
     public static void applyPostProcess(com.mojang.blaze3d.resource.GraphicsResourceAllocator allocator) {
-        if (disabled || !CyberwareConfig.POST_EFFECT_ENABLED.get()) {
+        if (disabled || !CyberwareConfig.POST_EFFECT_ENABLED) {
             return;
         }
         try {
@@ -206,52 +209,25 @@ public final class SandevistanPostProcessor {
         }
     }
 
-    /**
-     * 构建渲染帧图时挂上后处理链。
+    /*
+     * 【Fabric 移植 · 降级说明】
      *
-     * <p>整个流程用 try/catch 兜住：Mixin 没生效、PostChain 编译失败、驱动不支持 ——
-     * 任何一种都只意味着**没有这个特效**，不该把游戏一起带走。
+     * 原来的 onFrameGraph / frameGraphInternal 挂的是 NeoForge 的 FrameGraphSetupEvent，
+     * 用 event.getFrameGrapBuilder() 往帧图里加节点。Fabric 侧两条路都没有：
+     *   1) fabric-rendering-v1 的 LevelRenderEvents（12 个阶段）确实有 END_MAIN 这类时机，
+     *      但 LevelRenderContext 只暴露 submitNodeCollector()/poseStack()/bufferSource()，
+     *      **不提供 FrameGraphBuilder**（本机实测），接不上 addToFrame(...)；
+     *   2) 就算接上，原注释已记录过：Sodium 接管世界渲染管线后，写回 minecraft:main
+     *      的内容会被后续合成覆盖。
+     *
+     * 因此这里**整段删除**（不是注释保留）：可用的执行路径只剩下面 applyPostProcess，
+     * 由 GameRendererMixin 在 LevelRenderer.doEntityOutline() 之后手动调用
+     * chain.process(target, resourcePool) —— 那条路径不依赖任何帧图，本机实测所需字段与
+     * 方法（CrossFrameResourcePool resourcePool / render(DeltaTracker,boolean) /
+     * doEntityOutline()）在 Fabric 版 GameRenderer 与 LevelRenderer 里都在。
+     *
+     * 代价：这一版没有帧图内的后处理挂载点；若将来要接 Iris/Sodium 之外的管线，需重新设计。
      */
-    public static void onFrameGraph(FrameGraphSetupEvent event) {
-        if (disabled || !CyberwareConfig.POST_EFFECT_ENABLED.get()) {
-            return;
-        }
-        try {
-            frameGraphInternal(event);
-        } catch (Throwable t) {
-            disabled = true;
-            Cyberware.LOGGER.warn("[cyberware] 后处理已停用（{}）", t.toString());
-        }
-    }
-
-    private static void frameGraphInternal(FrameGraphSetupEvent event) {
-        float partial = event.getDeltaTracker().getGameTimeDeltaPartialTick(false);
-        float renderIntensity = Mth.lerp(partial, previousIntensity, intensity);
-        if (renderIntensity <= 0.001F) {
-            return;
-        }
-        if (!diagnosed) {
-            diagnosed = true;
-            Cyberware.LOGGER.info("[cyberware] 后处理诊断: 帧图事件已触发, intensity={}, tint=({},{},{})",
-                    renderIntensity, tintR, tintG, tintB);
-        }
-
-        Minecraft minecraft = Minecraft.getInstance();
-        PostChain chain = minecraft.getShaderManager().getPostChain(CHAIN_ID, LevelTargetBundle.MAIN_TARGETS);
-        if (chain == null) {
-            if (!chainMissingLogged) {
-                chainMissingLogged = true;
-                Cyberware.LOGGER.warn("[cyberware] PostChain 加载失败，后处理不会生效（check assets/cyberware/post_effect/sandevistan.json）");
-            }
-            return;
-        }
-
-        upload(chain, renderIntensity, minecraft.level == null ? 0L : minecraft.level.getGameTime());
-
-        int width = minecraft.getMainRenderTarget().width;
-        int height = minecraft.getMainRenderTarget().height;
-        chain.addToFrame(event.getFrameGrapBuilder(), width, height, event.getTargetBundle());
-    }
 
     /**
      * 把一组新的 uniform 值换进第一个 pass。
@@ -274,25 +250,26 @@ public final class SandevistanPostProcessor {
         lastUploaded = value;
 
         float pulse = (gameTime % 40L) / 40.0F;
-        ByteBuffer data = MemoryUtil.memAlloc(64);
-        try {
-            Std140Builder builder = Std140Builder.intoBuffer(data);
-            builder.putFloat(value)
-                    .putFloat(STRENGTH)
-                    .putFloat(BLUR_START)
-                    .putFloat(BLUR_FULL)
-                    .putFloat(WARP_AMOUNT)
-                    .putFloat(CHROMATIC)
-                    .putFloat(SAMPLES)
-                    .putFloat(pulse)
-                    .putFloat(tintR)
-                    .putFloat(tintG)
-                    .putFloat(tintB);
-            uniforms.put(UNIFORM_BLOCK,
-                    RenderSystem.getDevice().createBuffer(() -> "cyberware cyberconfig", GpuBuffer.USAGE_UNIFORM, builder.get()));
-        } finally {
-            MemoryUtil.memFree(data);
-        }
+        // Fabric 移植：原来用 lwjgl 的 MemoryUtil.memAlloc(64)（本机编译环境没有 lwjgl）。
+        // 改用 java.nio 的堆外直连缓冲 —— 两者都是 direct buffer，语义等价；
+        // ★ 但必须显式设 nativeOrder：memAlloc 返回的就是 nativeOrder，而 allocateDirect
+        //   默认 BIG_ENDIAN，漏了这一句会让 Std140 的浮点字节序翻转（着色器收到垃圾值）。
+        // 代价：不再手动 memFree，改由 GC 回收（每次强度变化才分配 64 字节，量可忽略）。
+        ByteBuffer data = ByteBuffer.allocateDirect(64).order(java.nio.ByteOrder.nativeOrder());
+        Std140Builder builder = Std140Builder.intoBuffer(data);
+        builder.putFloat(value)
+                .putFloat(STRENGTH)
+                .putFloat(BLUR_START)
+                .putFloat(BLUR_FULL)
+                .putFloat(WARP_AMOUNT)
+                .putFloat(CHROMATIC)
+                .putFloat(SAMPLES)
+                .putFloat(pulse)
+                .putFloat(tintR)
+                .putFloat(tintG)
+                .putFloat(tintB);
+        uniforms.put(UNIFORM_BLOCK,
+                RenderSystem.getDevice().createBuffer(() -> "cyberware cyberconfig", GpuBuffer.USAGE_UNIFORM, builder.get()));
         RETIRED.add(old);
         pumpRetired(false);
     }

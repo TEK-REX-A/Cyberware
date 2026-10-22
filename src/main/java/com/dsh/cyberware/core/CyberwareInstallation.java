@@ -136,7 +136,7 @@ public record CyberwareInstallation(Map<String, CyberwareData> installed) {
         if (player == null) {
             return EMPTY;
         }
-        CyberwareInstallation inst = player.getExistingDataOrNull(ModAttachments.INSTALLATION.get());
+        CyberwareInstallation inst = Attachments.get(Attachments.of(player), ModAttachments.INSTALLATION.get());
         return inst == null ? EMPTY : inst;
     }
 
@@ -162,10 +162,10 @@ public record CyberwareInstallation(Map<String, CyberwareData> installed) {
      * 配置值非法时回落到 {@link #MAX_TOTAL_CAPACITY}。
      */
     public static int capacityLimit() {
-        if (!CyberwareConfig.ENABLE_CAPACITY_LIMIT.get()) {
+        if (!CyberwareConfig.ENABLE_CAPACITY_LIMIT) {
             return Integer.MAX_VALUE;
         }
-        int configured = CyberwareConfig.DEFAULT_CAPACITY.get();
+        int configured = CyberwareConfig.DEFAULT_CAPACITY;
         return configured > 0 ? configured : MAX_TOTAL_CAPACITY;
     }
 
