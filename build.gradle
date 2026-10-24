@@ -2,7 +2,7 @@ plugins {
     id 'fabric-loom' version '1.19.1'
 }
 
-version = '0.5.3-Beta'
+version = '0.5.4-Beta'
 group = 'com.dsh.cyberware'
 description = 'Cyberware - 赛博朋克风格义体植入系统 (26.1.2 Fabric)'
 

@@ -48,9 +48,16 @@ import net.minecraft.world.phys.Vec3;
 public final class AfterimageRenderer {
 
     /** 最近处的残影透明度 */
-    private static final float MAX_ALPHA = 0.45F;
+    private static final float MAX_ALPHA = 0.75F;
     /** 透明度随「新旧」衰减的强度 */
-    private static final float ALPHA_FALLOFF = 0.80F;
+    private static final float ALPHA_FALLOFF = 0.55F;
+
+    /**
+     * 强度下限：{@code ClientTimeDilation.ratioNow()} 会掉到 0.1~0.2（斯安威斯坦刚起 / 快结束），
+     * 直接拿它乘 alpha 会让**最近的那一段残影**只有 0.06 —— 真机表现就是「人物本体完全看不见」。
+     * 这里把强度压成 {@code 下限 + (1-下限)×强度}，保证再淡的时候也看得出来。
+     */
+    private static final float INTENSITY_FLOOR = 0.60F;
     /**
      * 冷色渐变（A.txt 第 3 条：青绿色 / 青蓝色滤镜）。
      * HSV 里 0.5 上下就是青，往 0.38 偏是青绿、往 0.55 偏是青蓝。
@@ -74,6 +81,15 @@ public final class AfterimageRenderer {
     private static final java.util.concurrent.atomic.AtomicBoolean LAYER_LOGGED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
     /** 保命用：异常日志只打一次 */
+    /** 诊断日志去重：alpha 参数只打印一次 */
+    private static final java.util.concurrent.atomic.AtomicBoolean ALPHA_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** 诊断日志去重：主渲染路径确认一次 */
+    private static final java.util.concurrent.atomic.AtomicBoolean MAIN_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
+    /** 诊断日志去重：Iris 阴影通道跳过只打印一次 */
+    private static final java.util.concurrent.atomic.AtomicBoolean SHADOW_LOGGED =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
     private static final java.util.concurrent.atomic.AtomicBoolean FAIL_LOGGED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
@@ -122,6 +138,22 @@ public final class AfterimageRenderer {
             return;
         }
 
+        // ★ Iris 阴影通道：残影不再画一遍（主渲染照常）。
+        //   放在这两个便宜的门之后：intensity 先挡掉绝大多数帧，isLocalPlayer 再把范围收到
+        //   「只剩本地玩家」，所以这次反射调用是**每帧 1 次**，而不是每个实体 1 次。
+        //   必须在 AfterimageHistory.sample / submitModel 之前返回 —— 否则阴影通道照样会把
+        //   8 段残影的 submit 全部走一遍（正是要砍掉的开销）。
+        if (IrisCompat.isShadowPass()) {
+            if (SHADOW_LOGGED.compareAndSet(false, true)) {
+                System.out.println("[cyberware] 检测到 Iris 阴影通道：残影在阴影里跳过（主渲染不受影响）");
+            }
+            return;
+        }
+
+        if (MAIN_LOGGED.compareAndSet(false, true)) {
+            System.out.println("[cyberware] 残影主渲染进行中（Iris isShadowPass=false）");
+        }
+
         Minecraft minecraft = Minecraft.getInstance();
         int gameTime = minecraft.level == null ? 0 : (int) minecraft.level.getGameTime();
         // 每 tick 存一份完整状态（同一 tick 内只存一次）
@@ -140,6 +172,16 @@ public final class AfterimageRenderer {
         }
         int step = GHOST_STEP;
 
+        // 一次性把 alpha 相关的三个量算清楚（真机排错用）
+        float intensityMix = INTENSITY_FLOOR + (1.0F - INTENSITY_FLOOR) * intensity;
+        if (ALPHA_LOGGED.compareAndSet(false, true)) {
+            System.out.println("[cyberware] 残影 alpha: MAX_ALPHA=" + MAX_ALPHA
+                    + " FALLOFF=" + ALPHA_FALLOFF + " intensity=" + intensity
+                    + " mix=" + intensityMix + " wanted=" + wanted
+                    + " | g0=" + (MAX_ALPHA * intensityMix)
+                    + " gLast=" + (MAX_ALPHA * (1.0F - ALPHA_FALLOFF * (wanted <= 1 ? 0.0F : 1.0F)) * intensityMix));
+        }
+
         LivingEntityRendererAccessor accessor = (LivingEntityRendererAccessor) renderer;
         // SubmitNodeCollector extends OrderedSubmitNodeCollector（javap 实测），所以直接上转即可。
         // 原来那句 instanceof 是为了从 Ordered 往下转成 Submit，现在参数本来就是 Submit，恒成立。
@@ -147,6 +189,8 @@ public final class AfterimageRenderer {
         SubmitNodeCollector layerCollector = submitCollector;
 
         Identifier texture = renderer.getTextureLocation(state);
+        // ⚠ 曾怀疑 entityTranslucentCullItemTarget 的 ITEM_ENTITY_TARGET 被 Iris 丢弃，
+        //   但真机确认 Iris **没开光影包**（pass-through），该假设不成立 —— 已回退原类型。
         RenderType renderType = RenderTypes.entityTranslucentCullItemTarget(texture);
         EntityModel<LivingEntityRenderState> model = renderer.getModel();
         List<RenderLayer<LivingEntityRenderState, ?>> layers = accessor.cyberware$layers();
@@ -165,7 +209,7 @@ public final class AfterimageRenderer {
                             + " | current walk=" + state.walkAnimationPos + " x=" + state.x);
                 }
                 float t = wanted <= 1 ? 1.0F : (float) g / (wanted - 1);
-                float alpha = MAX_ALPHA * (1.0F - ALPHA_FALLOFF * t) * intensity;
+                float alpha = MAX_ALPHA * (1.0F - ALPHA_FALLOFF * t) * intensityMix;
                 if (alpha <= 0.02F) {
                     continue;
                 }

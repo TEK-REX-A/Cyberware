@@ -73,6 +73,15 @@ public class EquipmentLayerRendererMixin {
     private static final java.util.Set<String> LOGGED = new java.util.HashSet<>();
     /** 诊断日志去重：渲染类型替换只打印一次 */
     private static final java.util.Set<String> RT_LOGGED = new java.util.HashSet<>();
+    /**
+     * 护甲单独再压一档透明度。
+     *
+     * <p>主模型（{@code AfterimageRenderer} 的全局 alpha）要保持「人物看得见」，
+     * 但护甲是 cutout 材质、alpha test 不混合，同样 alpha 下会显得比本体实 —— 主人反馈
+     * 「盔甲不怎么透明，把人物盖住了一部分」。所以只在这里乘 0.5，不动全局 MAX_ALPHA。
+     */
+    private static final float ARMOR_ALPHA_SCALE = 0.8F;
+
     /** 诊断日志去重：纹饰顶点色只打印一次 */
     private static final java.util.concurrent.atomic.AtomicBoolean TRIM_LOGGED =
             new java.util.concurrent.atomic.AtomicBoolean(false);
@@ -147,7 +156,7 @@ public class EquipmentLayerRendererMixin {
             System.out.println("[cyberware] 护甲残影染色生效: alpha=" + alpha
                     + " color=" + Integer.toHexString(color));
         }
-        cir.setReturnValue(ARGB.multiplyAlpha(color, alpha));
+        cir.setReturnValue(ARGB.multiplyAlpha(color, alpha * ARMOR_ALPHA_SCALE));
     }
 
     /**
@@ -222,7 +231,7 @@ public class EquipmentLayerRendererMixin {
                 System.out.println("[cyberware] 纹饰顶点色已替换: 原色=" + Integer.toHexString(tintedColor)
                         + " alpha=" + alpha);
             }
-            color = ARGB.color(Math.round(Math.min(1.0F, alpha) * 255.0F), 255, 255, 255);
+            color = ARGB.color(Math.round(Math.min(1.0F, alpha * ARMOR_ALPHA_SCALE) * 255.0F), 255, 255, 255);
         }
         // 其余实参一律原样传回，等于「只改了 tintedColor 这一个」
         original.call(collector, model, state, poseStack, renderType, light, overlayCoord,
